@@ -492,7 +492,7 @@ Retourne UNIQUEMENT un JSON valide :
             onMouseLeave={e => e.currentTarget.style.background = "#C9A84C"}>
             Analyser ma situation →
           </button>
-          <p style={S.landingCTASub}>Gratuit · Confidentiel · Résultat immédiat</p>
+          <p style={S.landingCTASub}>Confidentiel · Résultat immédiat</p>
         </div>
         <div style={S.landingFeatures}>
           {[
