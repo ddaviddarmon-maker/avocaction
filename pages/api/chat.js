@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
     // ── Paramètres communs ──────────────────────────────
     const params = {
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-5-20251001",
       max_tokens: 2048,
       system: system || SYSTEM,
       messages,
