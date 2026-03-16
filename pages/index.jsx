@@ -260,16 +260,13 @@ RÈGLES ABSOLUES :
 NE JAMAIS : donner des conseils juridiques, expliquer les droits, faire des listes, écrire plus d'une phrase.`;
   }
 
-  async function startConversation(answers) {
-    setAgentLoading(true);
-    try {
-      const raw = await callAPI([{ role: "user", content: "Démarre." }], buildConversationSystem(answers));
-      const parsed = parseAgentReply(raw);
-      setConversation([{ role: "assistant", content: parsed.message, options: parsed.options || [] }]);
-    } catch {
-      setConversation([{ role: "assistant", content: "Décrivez votre problème en quelques mots.", options: [] }]);
-    }
-    setAgentLoading(false);
+  function startConversation(answers) {
+    // Premier message fixe — on n'appelle pas l'API pour éviter les longues introductions
+    setConversation([{
+      role: "assistant",
+      content: "Décrivez votre problème en quelques mots.",
+      options: []
+    }]);
   }
 
   // Parse la réponse JSON de l'agent
