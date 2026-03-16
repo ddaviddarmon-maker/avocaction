@@ -36,7 +36,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { messages, enableWebSearch } = req.body;
+    const { messages, enableWebSearch, system } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: "messages requis" });
@@ -44,9 +44,9 @@ export default async function handler(req, res) {
 
     // ── Paramètres communs ──────────────────────────────
     const params = {
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6-20250514",
       max_tokens: 2048,
-      system: SYSTEM,
+      system: system || SYSTEM,
       messages,
     };
 

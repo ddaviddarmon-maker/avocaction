@@ -145,6 +145,59 @@ const STEPS_FIN = [
 // ═══════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════
+// ── Composant champ date dans conversation ────────────────
+function ConvDateInput({ placeholder, onSubmit }) {
+  const [val, setVal] = useState("");
+  return (
+    <div style={{ marginTop:8, maxWidth:"80%", display:"flex", gap:8 }}>
+      <input
+        style={{ flex:1, padding:"9px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:13, fontFamily:"Calibri, sans-serif", outline:"none", background:"#F7F5F0", color:"#0A1628" }}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        placeholder={placeholder || "JJ/MM/AAAA"}
+        onKeyDown={e => { if (e.key === "Enter" && val.trim()) onSubmit(val); }}
+        autoFocus
+      />
+      <button
+        onClick={() => { if (val.trim()) onSubmit(val); }}
+        disabled={!val.trim()}
+        style={{ padding:"9px 14px", background:"#0A1628", color:"#C9A84C", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, opacity: val.trim() ? 1 : 0.4 }}>
+        →
+      </button>
+    </div>
+  );
+}
+
+// ── Composant multi-select dans conversation ──────────────
+function ConvMultiSelect({ options, onSubmit }) {
+  const [selected, setSelected] = useState([]);
+  const toggle = (opt) => setSelected(prev =>
+    prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]
+  );
+  return (
+    <div style={{ marginTop:8, maxWidth:"80%", display:"flex", flexDirection:"column", gap:6 }}>
+      {options.map((opt, i) => {
+        const checked = selected.includes(opt);
+        return (
+          <button key={i} onClick={() => toggle(opt)}
+            style={{ padding:"9px 14px", background: checked ? "#FFF8E7" : "#F7F5F0", border: checked ? "1.5px solid #C9A84C" : "1.5px solid #E5E7EB", borderRadius:8, cursor:"pointer", fontSize:13, color:"#0A1628", textAlign:"left", fontFamily:"Calibri, sans-serif", display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ width:18, height:18, borderRadius:4, border: checked ? "2px solid #C9A84C" : "2px solid #D1D5DB", background: checked ? "#C9A84C" : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, color:"#fff", fontSize:11, fontWeight:"bold" }}>
+              {checked ? "✓" : ""}
+            </span>
+            {opt}
+          </button>
+        );
+      })}
+      <button
+        onClick={() => { if (selected.length > 0) onSubmit(selected.join(", ")); }}
+        disabled={selected.length === 0}
+        style={{ padding:"9px 14px", background:"#0A1628", color:"#C9A84C", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif", opacity: selected.length > 0 ? 1 : 0.4, marginTop:4 }}>
+        Valider ({selected.length}) →
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState("debut");
@@ -187,10 +240,11 @@ export default function Home() {
   }
 
   async function callAPI(messages, system) {
+    const body = system ? { messages, system } : { messages };
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, system }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`API ${response.status}`);
     return extractText(await response.json());
@@ -232,30 +286,22 @@ export default function Home() {
     const asked = conv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
 
     // Date d'achat — toujours demandée sauf si mentionnée
-    if (!asked.includes("date") && !d.match(/20(2[0-9])|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|mois|semaine|hier|cette année|l'année/)) {
-      return { id:"date", message:"Quand avez-vous acheté ou utilisé ce produit ?",
-        options:["Moins de 3 mois","Entre 3 mois et 1 an","Entre 1 et 2 ans","Entre 2 et 5 ans","Plus de 5 ans"] };
+    if (!asked.includes("date") && !d.match(/20(2[0-9])|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|mois|semaine|hier|cette année/)) {
+      return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date",
+        placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     }
     // Préjudice corporel — si produit alim, santé ou danger
     if (!asked.includes("corpo") && (d.includes("malade") || d.includes("symptôme") || d.includes("nausée") || d.includes("vomis") || d.includes("blessé") || d.includes("allergi") || d.includes("hospitali") || d.includes("bébé") || d.includes("enfant"))) {
-      return { id:"corpo", message:"Quel type de préjudice corporel ?",
+      return { id:"corpo", content:"Quel type de préjudice corporel ?", multiSelect:true,
         options:["Nausées / vomissements","Réaction allergique","Hospitalisation","Blessure","Séquelles durables","Aucun symptôme"] };
     }
-    // Consultation médicale — si préjudice corpo
-    if (!asked.includes("medical") && conv.find(m => m.id === "corpo" && m.userAnswer && !m.userAnswer.includes("Aucun"))) {
-      return { id:"medical", message:"Avez-vous consulté un médecin ?",
-        options:["Oui, avec certificat médical","Oui, sans document","Non, pas encore","Non, pas nécessaire"] };
-    }
+
     // Preuve d'achat
     if (!asked.includes("preuve")) {
-      return { id:"preuve", message:"Disposez-vous d'une preuve d'achat ?",
+      return { id:"preuve", content:"Disposez-vous d'une preuve d'achat ?", multiSelect:true,
         options:["Ticket de caisse","Facture","Relevé bancaire","Photo de l'emballage","Aucune preuve"] };
     }
-    // Démarches
-    if (!asked.includes("demarche")) {
-      return { id:"demarche", message:"Avez-vous contacté l'entreprise ?",
-        options:["Oui, réponse refusée","Oui, sans réponse","Oui, en cours","Non"] };
-    }
+
     // Fin — on a assez
     return null;
   }
@@ -708,8 +754,16 @@ Retourne UNIQUEMENT un JSON valide :
                 <div style={{ ...S.convBubble, ...(m.role === "user" ? S.convBubbleUser : S.convBubbleAgent) }}>
                   {m.content}
                 </div>
-                {/* Options dynamiques sur le dernier message agent */}
-                {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && (
+                {/* Champ date */}
+                {m.role === "assistant" && m.type === "date" && i === conversation.length - 1 && !conversationDone && (
+                  <ConvDateInput placeholder={m.placeholder} onSubmit={sendMessage} />
+                )}
+                {/* Options multi-select */}
+                {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && m.multiSelect && (
+                  <ConvMultiSelect options={m.options} onSubmit={sendMessage} />
+                )}
+                {/* Options single select */}
+                {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && !m.multiSelect && (
                   <div style={S.convOptions}>
                     {m.options.map((opt, j) => (
                       <button key={j}
