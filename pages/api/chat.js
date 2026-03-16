@@ -1,97 +1,113 @@
-// pages/api/chat.js
-// ✅ Cette route s'exécute côté SERVEUR uniquement
-// ✅ La clé API n'est JAMAIS exposée au navigateur
+// pages/api/chat.js  (ou app/api/chat/route.js selon ta structure Next.js)
+// ─────────────────────────────────────────────────────────────────
+// Remplace TON fichier existant par celui-ci.
+// Gère :
+//   - Le chat standard (analyse dossier)
+//   - La recherche web autonome pour identifier une marque (enableWebSearch: true)
+// ─────────────────────────────────────────────────────────────────
 
 import Anthropic from "@anthropic-ai/sdk";
 
-const SYSTEM_PROMPT = `Tu es AVOCACTION, un agent IA juridique expert en droit de la consommation français et en actions de groupe.
-
-Tu guides les utilisateurs à travers un questionnaire intelligent pour évaluer leur situation juridique selon la loi n° 2025-391 du 30 avril 2025 sur les actions de groupe.
-
-ÉTAPES DE L'ENTRETIEN :
-1. Accueil + nature du préjudice (produit défectueux, pratique commerciale trompeuse, frais bancaires abusifs, litige télécom, assurance, énergie, etc.)
-2. Informations sur le professionnel mis en cause (nom, secteur d'activité)
-3. Montant estimé du préjudice subi
-4. Date des faits (important pour la prescription - délai de 5 ans en général)
-5. Existence de preuves (factures, contrats, échanges écrits, photos)
-6. Si d'autres personnes sont concernées à leur connaissance
-
-RÈGLES IMPORTANTES :
-- Pose UNE seule question à la fois, de façon claire et bienveillante
-- Langage accessible, pas de jargon juridique inutile
-- Sois empathique : la personne a subi un préjudice
-- Après avoir collecté TOUTES les informations (étapes 1 à 6), génère une ANALYSE STRUCTURÉE
-
-FORMAT DE L'ANALYSE (JSON pur, inclus dans ta réponse) :
-{
-  "analyse_complete": true,
-  "resume_situation": "Résumé en 1-2 phrases de la situation",
-  "domaine_juridique": "Ex: Droit bancaire / Télécom / Produit défectueux",
-  "professionnel_incrimine": "Nom ou description",
-  "prejudice_estime": "Montant ou fourchette",
-  "date_faits": "Période",
-  "risque_prescription": "faible|modéré|urgent",
-  "delai_prescription": "Ex: Vous avez jusqu'en mars 2030",
-  "actions_groupe_potentielles": [
-    {
-      "nom": "Nom de l'action ou du type de recours",
-      "organisme": "UFC-Que Choisir / CLCV / Cabinet AVOCACTION / etc.",
-      "statut": "En cours|Possible|À investiguer",
-      "pertinence": 85
-    }
-  ],
-  "score_compatibilite_externe": 75,
-  "score_similarite_interne": 60,
-  "score_faisabilite_collective": 70,
-  "score_global": 68,
-  "recommandation": "Explication claire de ce que nous conseillons et pourquoi",
-  "prochaines_etapes": [
-    "Étape 1 concrète",
-    "Étape 2 concrète",
-    "Étape 3 concrète"
-  ]
-}
-
-Pour les actions de groupe, cite des exemples réalistes : actions contre des banques pour frais abusifs, opérateurs télécom, compagnies aériennes (retards), fournisseurs d'énergie, assureurs, vendeurs de produits défectueux, plateformes numériques.
-
-Réponds TOUJOURS en français. Sois professionnel mais humain.`;
-
 const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY, // ← Côté serveur uniquement ✅
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// ── Système commun ────────────────────────────────────────
+const SYSTEM = `Tu es AVOCACTION, un agent IA spécialisé en droit de la consommation français 
+et en actions de groupe (loi n° 2025-391 du 30 avril 2025).
+
+Points de droit clés à appliquer :
+- Actions de groupe ouvertes aux particuliers, petits professionnels (< 5 salariés, contrat hors activité principale), 
+  personnes morales non professionnelles (syndicats de copropriétaires)
+- Associations agréées OU existant depuis 2 ans avec activité réelle peuvent représenter les victimes
+- Prescription produit : 2 ans (Art. L217-4 C. conso) à partir de la livraison
+- Prescription faits : 5 ans (Art. 2224 C. civil) à partir de la connaissance du dommage
+- Délai d'adhésion au groupe : 2 mois à 5 ans selon le jugement
+- Double procédure : jugement sur responsabilité PUIS réparation (opt-in)
+- Possibilité de cessation du manquement + réparation de tous types de préjudices
+- Règlement EU 261/2004 pour transport aérien (retard, annulation)
+- RGPD Art. 17 pour droit à l'effacement (délai de réponse : 1 mois)
+
+Ton ton est bienveillant, précis, sans jargon inutile.`;
+
 export default async function handler(req, res) {
-  // Seulement les requêtes POST
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Méthode non autorisée" });
-  }
-
-  const { messages } = req.body;
-
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: "Messages invalides" });
-  }
-
-  // Limite de sécurité : max 30 messages par session
-  if (messages.length > 30) {
-    return res.status(400).json({ error: "Session trop longue" });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const response = await client.messages.create({
+    const { messages, enableWebSearch } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "messages requis" });
+    }
+
+    // ── Paramètres communs ──────────────────────────────
+    const params = {
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
-      system: SYSTEM_PROMPT,
-      messages: messages,
+      max_tokens: 2048,
+      system: SYSTEM,
+      messages,
+    };
+
+    // ── Web search activé pour la recherche de marque ──
+    if (enableWebSearch) {
+      params.tools = [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+        },
+      ];
+      // Laisser Claude décider quand utiliser le tool
+      params.tool_choice = { type: "auto" };
+    }
+
+    const response = await client.messages.create(params);
+
+    // ── Extraire le texte final (après tool use éventuel) ──
+    // Si Claude a utilisé web_search, il y a plusieurs blocs content :
+    // tool_use → tool_result → puis le texte final
+    // On prend le dernier bloc text
+    let finalText = "";
+    for (const block of response.content) {
+      if (block.type === "text") {
+        finalText = block.text; // on prend le dernier text
+      }
+    }
+
+    // Si pas de texte (cas rare), on retourne le premier bloc
+    if (!finalText && response.content.length > 0) {
+      finalText = response.content[0].text || JSON.stringify(response.content[0]);
+    }
+
+    return res.status(200).json({
+      content: [{ type: "text", text: finalText }],
+      // Compatibilité avec d'autres formats
+      reply: finalText,
     });
 
-    const text = response.content?.[0]?.text || "";
-    return res.status(200).json({ reply: text });
+  } catch (err) {
+    console.error("API chat error:", err);
 
-  } catch (error) {
-    console.error("Erreur API Anthropic:", error);
-    return res.status(500).json({
-      error: "Erreur lors de l'analyse. Veuillez réessayer.",
-    });
+    // Message d'erreur utile pour le debug
+    const msg = err.message || "Erreur inconnue";
+    if (msg.includes("401") || msg.includes("authentication")) {
+      return res.status(500).json({
+        error: "Clé API invalide. Vérifiez ANTHROPIC_API_KEY dans les variables d'environnement Vercel.",
+      });
+    }
+    if (msg.includes("529") || msg.includes("overloaded")) {
+      return res.status(503).json({ error: "API temporairement surchargée. Réessayez dans quelques secondes." });
+    }
+
+    return res.status(500).json({ error: msg });
   }
 }
+
+// ── Pour App Router (app/api/chat/route.js) ──────────────
+// Si tu utilises le App Router de Next.js 13+, remplace la fonction ci-dessus par :
+//
+// export async function POST(request) {
+//   const body = await request.json();
+//   // ... même logique, retourne Response.json(...)
+// }
