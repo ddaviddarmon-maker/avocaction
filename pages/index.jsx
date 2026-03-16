@@ -225,86 +225,90 @@ export default function Home() {
   // ═══════════════════════════════════════════════════════
   // BLOC 2 — Agent conversationnel
   // ═══════════════════════════════════════════════════════
-  function buildConversationSystem(answers) {
-    return `Tu es AVOCACTION, agent IA expert en droit de la consommation français (loi 2025-391 du 30 avril 2025).
+  // ── Arbre de questions conversationnel (sans Claude) ─────
+  // Après la description libre, on pose des questions ciblées avec checkboxes
+  function getNextConvQuestion(conv, desc) {
+    const d = desc.toLowerCase();
+    const asked = conv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
 
-Contexte déjà connu :
-- Cadre : ${answers.cadre || "particulier"}
-- Résidence : ${answers.residence || "France"}
-- Lieu d'achat : ${answers.localisation || "France"}
-
-TON RÔLE : Collecter UNIQUEMENT les informations manquantes pour analyser le dossier. Tu es un formulaire intelligent, pas un conseiller.
-
-RÈGLES ABSOLUES :
-1. Retourne TOUJOURS un JSON valide, jamais de texte brut :
-   {"message": "phrase courte", "options": ["opt1", "opt2"], "fin": false}
-   - "message" : 1 seule phrase courte (max 15 mots)
-   - "options" : liste de cases à cocher si une clarification est nécessaire, sinon []
-   - "fin" : true uniquement quand tu as toutes les infos nécessaires
-
-2. Premier message EXACT :
-   {"message": "Décrivez votre problème en quelques mots.", "options": [], "fin": false}
-
-3. Déduis automatiquement ce que tu peux depuis la description. Ne redemande JAMAIS ce qui a déjà été dit.
-
-4. Si tu as besoin d'une précision, génère des options adaptées au contexte. Exemples :
-   - Pour le type de préjudice : ["Financier (remboursement)", "Corporel (santé)", "Moral (stress)", "Plusieurs"]
-   - Pour la date : ["Moins de 6 mois", "6 mois à 2 ans", "2 à 5 ans", "Plus de 5 ans"]
-   - Pour l'entreprise : ["Danone", "Nestlé", "Autre marque"]
-
-5. Maximum 3 échanges après la description initiale.
-
-6. Quand tu as : problème compris + date approximative + type de préjudice → 
-   {"message": "Merci, j'ai toutes les informations.", "options": [], "fin": true}
-
-NE JAMAIS : donner des conseils juridiques, expliquer les droits, faire des listes, écrire plus d'une phrase.`;
+    // Date d'achat — toujours demandée sauf si mentionnée
+    if (!asked.includes("date") && !d.match(/20(2[0-9])|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|mois|semaine|hier|cette année|l'année/)) {
+      return { id:"date", message:"Quand avez-vous acheté ou utilisé ce produit ?",
+        options:["Moins de 3 mois","Entre 3 mois et 1 an","Entre 1 et 2 ans","Entre 2 et 5 ans","Plus de 5 ans"] };
+    }
+    // Préjudice corporel — si produit alim, santé ou danger
+    if (!asked.includes("corpo") && (d.includes("malade") || d.includes("symptôme") || d.includes("nausée") || d.includes("vomis") || d.includes("blessé") || d.includes("allergi") || d.includes("hospitali") || d.includes("bébé") || d.includes("enfant"))) {
+      return { id:"corpo", message:"Quel type de préjudice corporel ?",
+        options:["Nausées / vomissements","Réaction allergique","Hospitalisation","Blessure","Séquelles durables","Aucun symptôme"] };
+    }
+    // Consultation médicale — si préjudice corpo
+    if (!asked.includes("medical") && conv.find(m => m.id === "corpo" && m.userAnswer && !m.userAnswer.includes("Aucun"))) {
+      return { id:"medical", message:"Avez-vous consulté un médecin ?",
+        options:["Oui, avec certificat médical","Oui, sans document","Non, pas encore","Non, pas nécessaire"] };
+    }
+    // Preuve d'achat
+    if (!asked.includes("preuve")) {
+      return { id:"preuve", message:"Disposez-vous d'une preuve d'achat ?",
+        options:["Ticket de caisse","Facture","Relevé bancaire","Photo de l'emballage","Aucune preuve"] };
+    }
+    // Démarches
+    if (!asked.includes("demarche")) {
+      return { id:"demarche", message:"Avez-vous contacté l'entreprise ?",
+        options:["Oui, réponse refusée","Oui, sans réponse","Oui, en cours","Non"] };
+    }
+    // Fin — on a assez
+    return null;
   }
 
   function startConversation(answers) {
-    // Premier message fixe — on n'appelle pas l'API pour éviter les longues introductions
-    setConversation([{
-      role: "assistant",
-      content: "Décrivez votre problème en quelques mots.",
-      options: []
-    }]);
-  }
-
-  // Parse la réponse JSON de l'agent
-  function parseAgentReply(raw) {
-    try {
-      const clean = raw.replace(/```json|```/g, "").trim();
-      const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
-      if (s >= 0 && e > s) return JSON.parse(clean.slice(s, e + 1));
-    } catch {}
-    // Fallback si pas du JSON valide
-    return { message: raw.replace(/[[FIN_CONVERSATION]]/g, "").trim(), options: [], fin: raw.includes("[[FIN_CONVERSATION]]") || raw.includes('"fin": true') };
+    setConversation([{ role:"assistant", id:"intro",
+      content:"Décrivez votre problème en quelques mots.", options:[] }]);
   }
 
   async function sendMessage(optionalValue) {
-    const val = (optionalValue || userInput).trim();
+    const val = (optionalValue !== undefined ? optionalValue : userInput).trim();
     if (!val || agentLoading) return;
     setUserInput("");
-    const newConv = [...conversation, { role: "user", content: val }];
-    setConversation(newConv);
-    setAgentLoading(true);
-    try {
-      const raw = await callAPI(
-        newConv.map(m => ({ role: m.role, content: m.content })),
-        buildConversationSystem(debutAnswers)
-      );
-      const parsed = parseAgentReply(raw);
-      const agentMsg = { role: "assistant", content: parsed.message, options: parsed.options || [] };
-      setConversation(prev => [...prev, agentMsg]);
-      if (parsed.fin) {
-        const extracted = await extractFromConversation([...newConv, { role: "assistant", content: parsed.message }]);
-        setExtractedData(extracted);
-        setConversationDone(true);
-      }
-    } catch {
-      setConversation(prev => [...prev, { role: "assistant", content: "Une erreur s'est produite.", options: [] }]);
+
+    // Ajouter la réponse utilisateur
+    const lastAgent = conversation[conversation.length - 1];
+    if (lastAgent?.id && lastAgent.role === "assistant") {
+      lastAgent.userAnswer = val;
     }
-    setAgentLoading(false);
+    const newConv = [...conversation, { role:"user", content: val }];
+    setConversation(newConv);
+
+    // Trouver la description initiale
+    const firstUserMsg = newConv.find(m => m.role === "user")?.content || "";
+
+    // Chercher la prochaine question
+    const nextQ = getNextConvQuestion(newConv, firstUserMsg);
+
+    if (nextQ) {
+      setConversation(prev => [...prev, { role:"assistant", ...nextQ }]);
+    } else {
+      // Plus de questions — extraire et terminer
+      setAgentLoading(true);
+      const convData = {};
+      newConv.filter(m => m.role === "assistant" && m.id).forEach(m => { if (m.userAnswer) convData[m.id] = m.userAnswer; });
+      // Extraire via Claude pour résumé structuré
+      try {
+        const text = await callAPI([{ role:"user", content:
+          `Extrais les infos de cette conversation et retourne UNIQUEMENT un JSON :
+{"entreprise":"...","type_produit":"...","probleme":"...","date":"...","prejudice":"...","details":"résumé"}
+Description : ${firstUserMsg}
+Données collectées : ${JSON.stringify(convData)}` }]);
+        const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
+        const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+        if (s>=0 && e>s) setExtractedData(JSON.parse(clean.slice(s,e+1)));
+      } catch {}
+      setAgentLoading(false);
+      setConversation(prev => [...prev, { role:"assistant", id:"fin",
+        content:"Merci, j'ai toutes les informations.", options:[] }]);
+      setConversationDone(true);
+    }
   }
+
 
   async function extractFromConversation(conv) {
     try {
