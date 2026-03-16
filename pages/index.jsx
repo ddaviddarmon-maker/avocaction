@@ -233,60 +233,78 @@ Contexte déjà connu :
 - Résidence : ${answers.residence || "France"}
 - Lieu d'achat : ${answers.localisation || "France"}
 
-TON RÔLE : Collecter les informations nécessaires via une conversation naturelle et intelligente. Tu es efficace et bienveillant.
+TON RÔLE : Collecter UNIQUEMENT les informations manquantes pour analyser le dossier. Tu es un formulaire intelligent, pas un conseiller.
 
-RÈGLES :
-1. Commence par inviter l'utilisateur à décrire son problème librement en 2-3 phrases
-2. Analyse chaque réponse — déduis automatiquement ce que tu peux (entreprise, type produit, date, nature du problème, préjudice)
-3. Ne pose QUE les questions dont tu n'as pas encore la réponse
-4. Maximum 4-5 échanges — une seule question à la fois
-5. Si la description est complète, tu peux n'avoir besoin que d'1-2 questions
-6. Quand tu as : entreprise identifiée + problème compris + date approximative + type de préjudice → termine par le message de clôture exact : "Merci, j'ai toutes les informations nécessaires pour analyser votre dossier. [[FIN_CONVERSATION]]"
+RÈGLES ABSOLUES :
+1. Retourne TOUJOURS un JSON valide, jamais de texte brut :
+   {"message": "phrase courte", "options": ["opt1", "opt2"], "fin": false}
+   - "message" : 1 seule phrase courte (max 15 mots)
+   - "options" : liste de cases à cocher si une clarification est nécessaire, sinon []
+   - "fin" : true uniquement quand tu as toutes les infos nécessaires
 
-INFORMATIONS À COLLECTER (priorité) :
-1. Description du problème (obligatoire)
-2. Entreprise / marque (si pas claire)
-3. Date approximative
-4. Nature exacte du problème (si pas évidente)
-5. Type de préjudice (financier, corporel, moral)
+2. Premier message EXACT :
+   {"message": "Décrivez votre problème en quelques mots.", "options": [], "fin": false}
 
-STYLE : Bienveillant, concis, professionnel. Pas de jargon. Une question à la fois.`;
+3. Déduis automatiquement ce que tu peux depuis la description. Ne redemande JAMAIS ce qui a déjà été dit.
+
+4. Si tu as besoin d'une précision, génère des options adaptées au contexte. Exemples :
+   - Pour le type de préjudice : ["Financier (remboursement)", "Corporel (santé)", "Moral (stress)", "Plusieurs"]
+   - Pour la date : ["Moins de 6 mois", "6 mois à 2 ans", "2 à 5 ans", "Plus de 5 ans"]
+   - Pour l'entreprise : ["Danone", "Nestlé", "Autre marque"]
+
+5. Maximum 3 échanges après la description initiale.
+
+6. Quand tu as : problème compris + date approximative + type de préjudice → 
+   {"message": "Merci, j'ai toutes les informations.", "options": [], "fin": true}
+
+NE JAMAIS : donner des conseils juridiques, expliquer les droits, faire des listes, écrire plus d'une phrase.`;
   }
 
   async function startConversation(answers) {
     setAgentLoading(true);
     try {
-      const reply = await callAPI([{ role: "user", content: "Démarre." }], buildConversationSystem(answers));
-      setConversation([{ role: "assistant", content: reply }]);
+      const raw = await callAPI([{ role: "user", content: "Démarre." }], buildConversationSystem(answers));
+      const parsed = parseAgentReply(raw);
+      setConversation([{ role: "assistant", content: parsed.message, options: parsed.options || [] }]);
     } catch {
-      setConversation([{ role: "assistant", content: "Bonjour ! Pouvez-vous décrire en quelques phrases votre problème — ce qui s'est passé, avec quelle entreprise, et quand ?" }]);
+      setConversation([{ role: "assistant", content: "Décrivez votre problème en quelques mots.", options: [] }]);
     }
     setAgentLoading(false);
   }
 
-  async function sendMessage() {
-    const val = userInput.trim();
+  // Parse la réponse JSON de l'agent
+  function parseAgentReply(raw) {
+    try {
+      const clean = raw.replace(/```json|```/g, "").trim();
+      const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+      if (s >= 0 && e > s) return JSON.parse(clean.slice(s, e + 1));
+    } catch {}
+    // Fallback si pas du JSON valide
+    return { message: raw.replace(/[[FIN_CONVERSATION]]/g, "").trim(), options: [], fin: raw.includes("[[FIN_CONVERSATION]]") || raw.includes('"fin": true') };
+  }
+
+  async function sendMessage(optionalValue) {
+    const val = (optionalValue || userInput).trim();
     if (!val || agentLoading) return;
     setUserInput("");
     const newConv = [...conversation, { role: "user", content: val }];
     setConversation(newConv);
     setAgentLoading(true);
     try {
-      const reply = await callAPI(
+      const raw = await callAPI(
         newConv.map(m => ({ role: m.role, content: m.content })),
         buildConversationSystem(debutAnswers)
       );
-      if (reply.includes("[[FIN_CONVERSATION]]")) {
-        const clean = reply.replace("[[FIN_CONVERSATION]]", "").trim();
-        setConversation(prev => [...prev, { role: "assistant", content: clean }]);
-        const extracted = await extractFromConversation([...newConv, { role: "assistant", content: clean }]);
+      const parsed = parseAgentReply(raw);
+      const agentMsg = { role: "assistant", content: parsed.message, options: parsed.options || [] };
+      setConversation(prev => [...prev, agentMsg]);
+      if (parsed.fin) {
+        const extracted = await extractFromConversation([...newConv, { role: "assistant", content: parsed.message }]);
         setExtractedData(extracted);
         setConversationDone(true);
-      } else {
-        setConversation(prev => [...prev, { role: "assistant", content: reply }]);
       }
     } catch {
-      setConversation(prev => [...prev, { role: "assistant", content: "Une erreur s'est produite. Pouvez-vous reformuler ?" }]);
+      setConversation(prev => [...prev, { role: "assistant", content: "Une erreur s'est produite.", options: [] }]);
     }
     setAgentLoading(false);
   }
@@ -689,6 +707,20 @@ Retourne UNIQUEMENT un JSON valide :
                 <div style={{ ...S.convBubble, ...(m.role === "user" ? S.convBubbleUser : S.convBubbleAgent) }}>
                   {m.content}
                 </div>
+                {/* Options dynamiques sur le dernier message agent */}
+                {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && (
+                  <div style={S.convOptions}>
+                    {m.options.map((opt, j) => (
+                      <button key={j}
+                        onClick={() => sendMessage(opt)}
+                        style={S.convOptionBtn}
+                        onMouseEnter={e => { e.currentTarget.style.background = "#FFF8E7"; e.currentTarget.style.borderColor = "#C9A84C"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "#F7F5F0"; e.currentTarget.style.borderColor = "#E5E7EB"; }}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {agentLoading && (
@@ -846,6 +878,8 @@ const S = {
   convSendBtn: { width:44, height:44, background:"#0A1628", color:"#C9A84C", border:"none", borderRadius:10, cursor:"pointer", fontSize:20, fontWeight:"bold", flexShrink:0 },
   convDoneBox: { background:"#EAF3DE", border:"1px solid #3B6D11", borderRadius:10, padding:"16px 20px", display:"flex", flexDirection:"column", gap:10 },
   convDoneText: { fontSize:13, color:"#1F4A0A", fontFamily:"Calibri, sans-serif", margin:0 },
+  convOptions: { display:"flex", flexDirection:"column", gap:6, marginTop:8, maxWidth:"80%" },
+  convOptionBtn: { padding:"9px 14px", background:"#F7F5F0", border:"1.5px solid #E5E7EB", borderRadius:8, cursor:"pointer", fontSize:13, color:"#0A1628", textAlign:"left", fontFamily:"Calibri, sans-serif", transition:"all 0.15s" },
 
   resultsPage: { minHeight:"100vh", background:"#0A1628", display:"flex", flexDirection:"column", fontFamily:"'Palatino Linotype', Palatino, serif" },
   resultsHeader: { padding:"20px 40px", borderBottom:"1px solid #1E3050", display:"flex", alignItems:"center", gap:20 },
