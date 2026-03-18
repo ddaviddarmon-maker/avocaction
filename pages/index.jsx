@@ -217,6 +217,15 @@ export default function Home() {
   const [finAnswers, setFinAnswers] = useState({});
   const [multiSelected, setMultiSelected] = useState([]);
 
+  // Identification producteur
+  const [producteurLoading, setProducteurLoading] = useState(false);
+
+  // Formulaire contact RGPD
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactInfo, setContactInfo] = useState({ nom:"", prenom:"", email:"", telephone:"", adresse:"" });
+  const [contactErrors, setContactErrors] = useState({});
+  const [pendingFinAnswers, setPendingFinAnswers] = useState(null);
+
   // Résultats
   const [isLoading, setIsLoading] = useState(false);
   const [analyse, setAnalyse] = useState(null);
@@ -313,8 +322,136 @@ export default function Home() {
     setConversation(newConv);
 
     const firstUserMsg = newConv.find(m => m.role === "user")?.content || "";
-    const nextQ = getNextConvQuestion(newConv, firstUserMsg);
 
+    // ── Après la description initiale → identifier le producteur ──────────
+    const alreadyAsked = newConv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
+    const isFirstDescription = newConv.filter(m => m.role === "user").length === 1;
+
+    if (isFirstDescription && !alreadyAsked.includes("producteur")) {
+      setProducteurLoading(true);
+      setConversation(prev => [...prev, {
+        role:"assistant", id:"producteur_loading",
+        content:"Identification du producteur en cours…", options:[]
+      }]);
+
+      try {
+        const text = await callAPI([{ role:"user", content:
+          `L'utilisateur décrit ce problème : "${val}"
+
+Identifie le fabricant / producteur / fournisseur principal du produit ou service mentionné.
+Utilise tes connaissances et si nécessaire infère à partir du contexte.
+
+Retourne UNIQUEMENT un JSON :
+{
+  "producteur": "Nom exact de l'entreprise productrice (ex: Apple Inc., Samsung, Netflix...)",
+  "certitude": "haute | moyenne | faible",
+  "explication": "1 phrase expliquant pourquoi (ex: MacBook est un produit fabriqué par Apple)"
+}
+
+Si tu ne peux pas identifier le producteur, retourne {"producteur": null, "certitude": "faible", "explication": "Producteur non identifiable"}`
+        }]);
+        const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
+        const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+        let prodData = { producteur: null, certitude: "faible", explication: "" };
+        if (s >= 0 && e > s) prodData = JSON.parse(clean.slice(s, e+1));
+
+        setProducteurLoading(false);
+
+        if (prodData.producteur && prodData.certitude !== "faible") {
+          // Remplacer le message loading par la confirmation
+          setConversation(prev => {
+            const filtered = prev.filter(m => m.id !== "producteur_loading");
+            return [...filtered, {
+              role: "assistant",
+              id: "producteur",
+              content: `J'ai identifié le producteur : **${prodData.producteur}**
+${prodData.explication}
+
+Pouvez-vous confirmer ?`,
+              producteur: prodData.producteur,
+              options: [
+                `Oui, c'est bien ${prodData.producteur}`,
+                "Non, ce n'est pas ça",
+                "Je ne sais pas"
+              ]
+            }];
+          });
+        } else {
+          // Producteur non identifié → demander directement
+          setConversation(prev => {
+            const filtered = prev.filter(m => m.id !== "producteur_loading");
+            return [...filtered, {
+              role: "assistant",
+              id: "producteur",
+              content: "Pouvez-vous me préciser le nom de l'entreprise ou du fabricant du produit concerné ?",
+              type: "text_input",
+              options: ["Je ne connais pas le fabricant"]
+            }];
+          });
+        }
+      } catch {
+        setProducteurLoading(false);
+        setConversation(prev => {
+          const filtered = prev.filter(m => m.id !== "producteur_loading");
+          return [...filtered, {
+            role: "assistant",
+            id: "producteur",
+            content: "Pouvez-vous me préciser le nom de l'entreprise ou du fabricant du produit concerné ?",
+            type: "text_input",
+            options: ["Je ne connais pas le fabricant"]
+          }];
+        });
+      }
+      return;
+    }
+
+    // ── Réponse à la confirmation producteur ─────────────────────────────
+    if (alreadyAsked.includes("producteur") && !alreadyAsked.includes("producteur_confirmed")) {
+      // Sauvegarder le producteur confirmé
+      const prodMsg = newConv.find(m => m.role === "assistant" && m.id === "producteur");
+      let producteurFinal = val;
+      if (val.startsWith("Oui") && prodMsg?.producteur) {
+        producteurFinal = prodMsg.producteur;
+      } else if (val === "Je ne sais pas" || val === "Je ne connais pas le fabricant") {
+        producteurFinal = "";
+      }
+      setExtractedData(prev => ({ ...prev, entreprise: producteurFinal }));
+
+      // Marquer comme confirmé et passer aux questions suivantes
+      const confirmMsg = {
+        role: "assistant",
+        id: "producteur_confirmed",
+        content: producteurFinal
+          ? `✓ Producteur enregistré : ${producteurFinal}`
+          : "✓ Producteur non renseigné — nous continuerons avec les informations disponibles.",
+        options: []
+      };
+      setConversation(prev => [...prev, confirmMsg]);
+
+      // Lancer la suite des questions
+      const nextQ = getNextConvQuestion([...newConv, confirmMsg], firstUserMsg);
+      if (nextQ) {
+        setTimeout(() => setConversation(prev => [...prev, { role:"assistant", ...nextQ }]), 300);
+      } else {
+        setAgentLoading(true);
+        try {
+          const text = await callAPI([{ role:"user", content:
+            `Extrais les infos et retourne UNIQUEMENT un JSON :
+{"entreprise":"${producteurFinal}","type_produit":"...","probleme":"...","date":"...","prejudice":"...","details":"résumé"}
+Description : ${firstUserMsg}` }]);
+          const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
+          const s = clean.indexOf("{"), e2 = clean.lastIndexOf("}");
+          if (s>=0 && e2>s) setExtractedData(JSON.parse(clean.slice(s,e2+1)));
+        } catch {}
+        setAgentLoading(false);
+        setConversation(prev => [...prev, { role:"assistant", id:"fin", content:"Merci, j'ai toutes les informations.", options:[] }]);
+        setConversationDone(true);
+      }
+      return;
+    }
+
+    // ── Questions normales (date, preuves…) ───────────────────────────────
+    const nextQ = getNextConvQuestion(newConv, firstUserMsg);
     if (nextQ) {
       setConversation(prev => [...prev, { role:"assistant", ...nextQ }]);
     } else {
@@ -356,11 +493,47 @@ Données collectées : ${JSON.stringify(convData)}` }]);
     const newAnswers = { ...finAnswers, [currentFinStep.id]: option };
     setFinAnswers(newAnswers);
     setMultiSelected([]);
+
+    // Si RGPD = Oui → ouvrir le formulaire de contact avant de continuer
+    if (currentFinStep.id === "rgpd_consent" && option.startsWith("Oui")) {
+      setPendingFinAnswers(newAnswers);
+      setShowContactForm(true);
+      return;
+    }
+
     if (currentFinStep.last) {
       launchAnalysis(newAnswers);
       return;
     }
     let next = finIndex + 1;
+    while (next < activeFin.length) {
+      if (activeFin[next].skipIf?.({ ...newAnswers, ...extractedData })) { next++; continue; }
+      break;
+    }
+    if (next >= activeFin.length) launchAnalysis(newAnswers);
+    else setFinIndex(next);
+  }
+
+  function validateContact() {
+    const errors = {};
+    if (!contactInfo.nom.trim()) errors.nom = "Requis";
+    if (!contactInfo.prenom.trim()) errors.prenom = "Requis";
+    if (!contactInfo.email.trim() || !contactInfo.email.includes("@")) errors.email = "Email invalide";
+    if (!contactInfo.telephone.trim()) errors.telephone = "Requis";
+    if (!contactInfo.adresse.trim()) errors.adresse = "Requis";
+    setContactErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  function submitContactForm() {
+    if (!validateContact()) return;
+    // Fusionner les coordonnées dans les réponses
+    const newAnswers = { ...pendingFinAnswers, ...contactInfo };
+    setFinAnswers(newAnswers);
+    setShowContactForm(false);
+    // Continuer le questionnaire après rgpd_consent
+    const rgpdIdx = activeFin.findIndex(s => s.id === "rgpd_consent");
+    let next = rgpdIdx + 1;
     while (next < activeFin.length) {
       if (activeFin[next].skipIf?.({ ...newAnswers, ...extractedData })) { next++; continue; }
       break;
@@ -754,7 +927,11 @@ Retourne UNIQUEMENT un JSON valide :
               <div key={i} style={{ ...S.convMsg, ...(m.role === "user" ? S.convMsgUser : S.convMsgAgent) }}>
                 {m.role === "assistant" && <div style={S.convRole}>⚖ Agent AVOCACTION</div>}
                 <div style={{ ...S.convBubble, ...(m.role === "user" ? S.convBubbleUser : S.convBubbleAgent) }}>
-                  {m.content}
+                  {m.content.split(/(\*\*[^*]+\*\*)/).map((part, pi) =>
+                    part.startsWith("**") && part.endsWith("**")
+                      ? <strong key={pi} style={{ color:"#C9A84C" }}>{part.slice(2,-2)}</strong>
+                      : part.split("\n").map((line, li) => <span key={li}>{line}{li < part.split("\n").length-1 && <br/>}</span>)
+                  )}
                 </div>
                 {m.role === "assistant" && m.type === "date" && i === conversation.length - 1 && !conversationDone && (
                   <ConvDateInput placeholder={m.placeholder} onSubmit={sendMessage} />
@@ -816,7 +993,64 @@ Retourne UNIQUEMENT un JSON valide :
         </div>
       )}
 
-      {phase === "fin" && currentFinStep && (
+      {/* ── FORMULAIRE CONTACT RGPD ── */}
+      {showContactForm && (
+        <div style={S.questionContainer}>
+          <div style={S.stepLabel}>Vos coordonnées</div>
+          <p style={S.question}>Pour vous recontacter et activer la veille personnalisée</p>
+          <p style={{ fontSize:12, color:S_GREY, fontFamily:"Calibri, sans-serif", margin:"-8px 0 4px" }}>
+            Vos données sont protégées conformément à notre{" "}
+            <a href="/rgpd" target="_blank" style={{ color:"#C9A84C", textDecoration:"underline" }}>
+              politique de confidentialité (RGPD)
+            </a>
+          </p>
+
+          {[
+            { id:"prenom", label:"Prénom", type:"text", placeholder:"Votre prénom" },
+            { id:"nom", label:"Nom", type:"text", placeholder:"Votre nom de famille" },
+            { id:"email", label:"Email", type:"email", placeholder:"votre@email.com" },
+            { id:"telephone", label:"Téléphone", type:"tel", placeholder:"06 00 00 00 00" },
+            { id:"adresse", label:"Adresse complète", type:"text", placeholder:"N° rue, ville, code postal" },
+          ].map(field => (
+            <div key={field.id} style={{ display:"flex", flexDirection:"column", gap:4 }}>
+              <label style={{ fontSize:12, fontWeight:"bold", color:"#0A1628", fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1 }}>
+                {field.label} <span style={{ color:"#C0392B" }}>*</span>
+              </label>
+              <input
+                type={field.type}
+                value={contactInfo[field.id]}
+                onChange={e => setContactInfo(prev => ({ ...prev, [field.id]: e.target.value }))}
+                placeholder={field.placeholder}
+                style={{
+                  padding:"12px 14px", border: contactErrors[field.id] ? "1.5px solid #C0392B" : "1.5px solid #E5E7EB",
+                  borderRadius:10, fontSize:14, fontFamily:"Calibri, sans-serif", outline:"none",
+                  background:"#FFFFFF", color:"#0A1628"
+                }}
+              />
+              {contactErrors[field.id] && (
+                <span style={{ fontSize:11, color:"#C0392B", fontFamily:"Calibri, sans-serif" }}>{contactErrors[field.id]}</span>
+              )}
+            </div>
+          ))}
+
+          <div style={{ fontSize:11, color:"#6B7280", fontFamily:"Calibri, sans-serif", lineHeight:1.6, background:"#F7F5F0", padding:"10px 14px", borderRadius:8, border:"1px solid #E5E7EB" }}>
+            En soumettant ce formulaire, vous consentez à ce que vos données personnelles soient utilisées
+            pour l'analyse juridique, la veille automatique et les alertes de prescription.
+            Vous pouvez retirer votre consentement à tout moment. Voir notre{" "}
+            <a href="/rgpd" target="_blank" style={{ color:"#C9A84C" }}>politique de confidentialité</a>.
+          </div>
+
+          <button onClick={submitContactForm} style={S.submitBtn}>
+            Valider et continuer vers l'analyse →
+          </button>
+          <button onClick={() => { setShowContactForm(false); setContactErrors({}); }}
+            style={S.backBtn}>
+            ← Annuler (analyse sans sauvegarde)
+          </button>
+        </div>
+      )}
+
+      {phase === "fin" && currentFinStep && !showContactForm && (
         <div style={S.questionContainer}>
           <div style={S.stepLabel}>{currentFinStep.label}</div>
           <p style={S.question}>{currentFinStep.question}</p>
@@ -866,6 +1100,7 @@ Retourne UNIQUEMENT un JSON valide :
 // ═══════════════════════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════════════════════
+const S_GREY = "#6B7280";
 const S = {
   logo: { fontSize:22, fontWeight:"bold", letterSpacing:1, color:"#FFFFFF" },
   logoGold: { color:"#C9A84C" },
