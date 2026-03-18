@@ -142,9 +142,6 @@ const STEPS_FIN = [
   },
 ];
 
-// ═══════════════════════════════════════════════════════════
-// COMPOSANT PRINCIPAL
-// ═══════════════════════════════════════════════════════════
 // ── Composant champ date dans conversation ────────────────
 function ConvDateInput({ placeholder, onSubmit }) {
   const [val, setVal] = useState("");
@@ -279,30 +276,22 @@ export default function Home() {
   // ═══════════════════════════════════════════════════════
   // BLOC 2 — Agent conversationnel
   // ═══════════════════════════════════════════════════════
-  // ── Arbre de questions conversationnel (sans Claude) ─────
-  // Après la description libre, on pose des questions ciblées avec checkboxes
   function getNextConvQuestion(conv, desc) {
     const d = desc.toLowerCase();
     const asked = conv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
 
-    // Date d'achat — toujours demandée sauf si mentionnée
     if (!asked.includes("date") && !d.match(/20(2[0-9])|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|mois|semaine|hier|cette année/)) {
       return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date",
         placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     }
-    // Préjudice corporel — si produit alim, santé ou danger
     if (!asked.includes("corpo") && (d.includes("malade") || d.includes("symptôme") || d.includes("nausée") || d.includes("vomis") || d.includes("blessé") || d.includes("allergi") || d.includes("hospitali") || d.includes("bébé") || d.includes("enfant"))) {
       return { id:"corpo", content:"Quel type de préjudice corporel ?", multiSelect:true,
         options:["Nausées / vomissements","Réaction allergique","Hospitalisation","Blessure","Séquelles durables","Aucun symptôme"] };
     }
-
-    // Preuve d'achat
     if (!asked.includes("preuve")) {
       return { id:"preuve", content:"Disposez-vous d'une preuve d'achat ?", multiSelect:true,
         options:["Ticket de caisse","Facture","Relevé bancaire","Photo de l'emballage","Aucune preuve"] };
     }
-
-    // Fin — on a assez
     return null;
   }
 
@@ -316,7 +305,6 @@ export default function Home() {
     if (!val || agentLoading) return;
     setUserInput("");
 
-    // Ajouter la réponse utilisateur
     const lastAgent = conversation[conversation.length - 1];
     if (lastAgent?.id && lastAgent.role === "assistant") {
       lastAgent.userAnswer = val;
@@ -324,20 +312,15 @@ export default function Home() {
     const newConv = [...conversation, { role:"user", content: val }];
     setConversation(newConv);
 
-    // Trouver la description initiale
     const firstUserMsg = newConv.find(m => m.role === "user")?.content || "";
-
-    // Chercher la prochaine question
     const nextQ = getNextConvQuestion(newConv, firstUserMsg);
 
     if (nextQ) {
       setConversation(prev => [...prev, { role:"assistant", ...nextQ }]);
     } else {
-      // Plus de questions — extraire et terminer
       setAgentLoading(true);
       const convData = {};
       newConv.filter(m => m.role === "assistant" && m.id).forEach(m => { if (m.userAnswer) convData[m.id] = m.userAnswer; });
-      // Extraire via Claude pour résumé structuré
       try {
         const text = await callAPI([{ role:"user", content:
           `Extrais les infos de cette conversation et retourne UNIQUEMENT un JSON :
@@ -353,22 +336,6 @@ Données collectées : ${JSON.stringify(convData)}` }]);
         content:"Merci, j'ai toutes les informations.", options:[] }]);
       setConversationDone(true);
     }
-  }
-
-
-  async function extractFromConversation(conv) {
-    try {
-      const text = await callAPI([{
-        role: "user",
-        content: `Extrais les informations de cette conversation et retourne UNIQUEMENT un JSON :
-{"entreprise":"...","type_produit":"...","probleme":"...","date":"...","prejudice":"...","details":"résumé complet"}
-Conversation : ${conv.map(m => m.role + ": " + m.content).join("\n")}`
-      }]);
-      const clean = text.replace(/```json|```/g, "").trim();
-      const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
-      if (s >= 0 && e > s) return JSON.parse(clean.slice(s, e + 1));
-    } catch {}
-    return {};
   }
 
   function passToFin() {
@@ -403,7 +370,7 @@ Conversation : ${conv.map(m => m.role + ": " + m.content).join("\n")}`
   }
 
   // ═══════════════════════════════════════════════════════
-  // ANALYSE
+  // ANALYSE + SAUVEGARDE SUPABASE
   // ═══════════════════════════════════════════════════════
   async function launchAnalysis(finalFinAnswers) {
     setPhase("results");
@@ -415,8 +382,50 @@ Conversation : ${conv.map(m => m.role + ": " + m.content).join("\n")}`
       const reply = await callAPI([{ role: "user", content: buildPrompt(allData) }]);
       const clean = reply.replace(/```json|```/g, "").trim();
       const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
-      if (s >= 0 && e > s) setAnalyse(JSON.parse(clean.slice(s, e + 1)));
-      else setAnalyse({ resume: reply, scores: { compatibilite: 50, similarite: 50, faisabilite: 50, global: 50 } });
+      let parsed = null;
+      if (s >= 0 && e > s) {
+        parsed = JSON.parse(clean.slice(s, e + 1));
+      } else {
+        parsed = { resume: reply, scores: { compatibilite: 50, similarite: 50, faisabilite: 50, global: 50 } };
+      }
+
+      // ── SAUVEGARDE SUPABASE (si consentement RGPD donné) ──
+      if (finalFinAnswers.rgpd_consent === "Oui, j'accepte la sauvegarde et les alertes") {
+        try {
+          const saveRes = await fetch("/api/save-dossier", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dossier: {
+                ...debutAnswers,
+                ...extractedData,
+                ...finalFinAnswers,
+                conversation_resume: conversation
+                  .filter(m => m.role === "user")
+                  .map(m => m.content)
+                  .join(" | "),
+              },
+              analyse: parsed,
+            }),
+          });
+          const saveData = await saveRes.json();
+
+          // Si clustering détecté → enrichir le message action de groupe
+          if (saveData.clustering_alerte && parsed.action_groupe) {
+            parsed.action_groupe = {
+              ...parsed.action_groupe,
+              potentiel: "élevé",
+              message: (parsed.action_groupe.message || "") +
+                " D'autres consommateurs ont déjà signalé le même problème dans notre base — une action collective est possible.",
+            };
+          }
+        } catch (saveErr) {
+          // Ne pas bloquer l'affichage des résultats si la sauvegarde échoue
+          console.error("[save-dossier]", saveErr);
+        }
+      }
+
+      setAnalyse(parsed);
     } catch (err) {
       setAnalyse({ resume: `Erreur : ${err.message}`, scores: { compatibilite: 0, similarite: 0, faisabilite: 0, global: 0 } });
     }
@@ -454,9 +463,9 @@ Retourne UNIQUEMENT un JSON valide :
     "message": "explication du potentiel d'action collective"
   },
   "scores": {
-    "compatibilite": <0-100 : critères légaux remplis, résidence France, délais non expirés, cadre consommateur>,
-    "similarite": <0-100 : cas similaires connus, rappel officiel, articles presse, antécédents entreprise>,
-    "faisabilite": <0-100 : préjudice homogène, preuves disponibles, entreprise solvable, nombre victimes estimé>,
+    "compatibilite": <0-100>,
+    "similarite": <0-100>,
+    "faisabilite": <0-100>,
     "global": <moyenne arrondie des 3 scores>
   },
   "recommandation": "conseil personnalisé et actionnable en 2-3 phrases",
@@ -574,7 +583,6 @@ Retourne UNIQUEMENT un JSON valide :
           </div>
         ) : analyse ? (
           <div style={S.resultsBody}>
-            {/* Résumé */}
             <div style={S.rCard}>
               <div style={S.rCardHeader}>
                 <span style={S.rIcon}>📋</span>
@@ -585,7 +593,6 @@ Retourne UNIQUEMENT un JSON valide :
               <p style={S.rText}>{analyse.resume}</p>
             </div>
 
-            {/* Scores */}
             {analyse.scores && (
               <div style={S.rCard}>
                 <div style={S.rCardHeader}>
@@ -615,7 +622,6 @@ Retourne UNIQUEMENT un JSON valide :
               </div>
             )}
 
-            {/* 3 cartes */}
             <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
               {analyse.prescription && (
                 <div style={{ ...S.rCard, flex:1, minWidth:220, borderTop:`4px solid ${preC[analyse.prescription.statut]||"#C9A84C"}` }}>
@@ -656,7 +662,6 @@ Retourne UNIQUEMENT un JSON valide :
               )}
             </div>
 
-            {/* Recommandation */}
             {analyse.recommandation && (
               <div style={{ ...S.rCard, background:"#0F2040", border:"1px solid #C9A84C" }}>
                 <div style={S.rCardHeader}>
@@ -667,7 +672,6 @@ Retourne UNIQUEMENT un JSON valide :
               </div>
             )}
 
-            {/* Étapes */}
             {analyse.etapes && (
               <div style={S.rCard}>
                 <div style={S.rCardHeader}>
@@ -710,7 +714,6 @@ Retourne UNIQUEMENT un JSON valide :
         </div>
       </div>
 
-      {/* ── BLOC 1 ── */}
       {phase === "debut" && (
         <div style={S.questionContainer}>
           <div style={S.stepLabel}>{currentDebutStep.label}</div>
@@ -744,7 +747,6 @@ Retourne UNIQUEMENT un JSON valide :
         </div>
       )}
 
-      {/* ── BLOC 2 — Conversation ── */}
       {phase === "conversation" && (
         <div style={S.convContainer}>
           <div style={S.convChat}>
@@ -754,15 +756,12 @@ Retourne UNIQUEMENT un JSON valide :
                 <div style={{ ...S.convBubble, ...(m.role === "user" ? S.convBubbleUser : S.convBubbleAgent) }}>
                   {m.content}
                 </div>
-                {/* Champ date */}
                 {m.role === "assistant" && m.type === "date" && i === conversation.length - 1 && !conversationDone && (
                   <ConvDateInput placeholder={m.placeholder} onSubmit={sendMessage} />
                 )}
-                {/* Options multi-select */}
                 {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && m.multiSelect && (
                   <ConvMultiSelect options={m.options} onSubmit={sendMessage} />
                 )}
-                {/* Options single select */}
                 {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && !m.multiSelect && (
                   <div style={S.convOptions}>
                     {m.options.map((opt, j) => (
@@ -817,7 +816,6 @@ Retourne UNIQUEMENT un JSON valide :
         </div>
       )}
 
-      {/* ── BLOC 3 ── */}
       {phase === "fin" && currentFinStep && (
         <div style={S.questionContainer}>
           <div style={S.stepLabel}>{currentFinStep.label}</div>
@@ -872,7 +870,6 @@ const S = {
   logo: { fontSize:22, fontWeight:"bold", letterSpacing:1, color:"#FFFFFF" },
   logoGold: { color:"#C9A84C" },
   subtitle: { fontSize:12, color:"#8B9AB0", fontFamily:"Calibri, sans-serif" },
-
   landingPage: { minHeight:"100vh", background:"#0A1628", display:"flex", flexDirection:"column", fontFamily:"'Palatino Linotype', Palatino, serif", color:"#FFFFFF" },
   landingHeader: { padding:"20px 48px", display:"flex", alignItems:"center", gap:16, borderBottom:"1px solid #1E3050" },
   landingHero: { display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", padding:"72px 24px 48px", gap:20, maxWidth:760, margin:"0 auto", width:"100%" },
@@ -896,14 +893,12 @@ const S = {
   landingStepDesc: { fontSize:13, color:"#6B7280", lineHeight:1.6, fontFamily:"Calibri, sans-serif" },
   landingBottom: { display:"flex", flexDirection:"column", alignItems:"center", padding:"48px 24px", gap:16 },
   landingLegal: { fontSize:11, color:"#3D4F63", fontFamily:"Calibri, sans-serif", textAlign:"center", margin:0 },
-
   quizPage: { minHeight:"100vh", background:"#F7F5F0", display:"flex", flexDirection:"column", fontFamily:"'Palatino Linotype', Palatino, serif" },
   quizHeader: { background:"#0A1628", padding:"16px 40px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"3px solid #C9A84C" },
   quizProgress: { display:"flex", alignItems:"center", gap:16 },
   stepCounter: { fontSize:13, color:"#C9A84C", fontFamily:"Calibri, sans-serif", whiteSpace:"nowrap" },
   progressBar: { width:200, height:4, background:"#1E3050", borderRadius:2 },
   progressFill: { height:"100%", background:"#C9A84C", borderRadius:2, transition:"width 0.4s ease" },
-
   questionContainer: { flex:1, maxWidth:680, margin:"0 auto", padding:"48px 24px 32px", width:"100%", display:"flex", flexDirection:"column", gap:16 },
   stepLabel: { fontSize:11, fontWeight:"bold", color:"#C9A84C", textTransform:"uppercase", letterSpacing:1.5, fontFamily:"Calibri, sans-serif" },
   question: { fontSize:18, color:"#0A1628", lineHeight:1.5, margin:"0 0 4px", fontWeight:"bold" },
@@ -918,7 +913,6 @@ const S = {
   clarifButtons: { display:"flex", gap:8 },
   clarifConfirm: { flex:1, padding:9, background:"#0A1628", color:"#C9A84C", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif" },
   clarifSkip: { padding:"9px 16px", background:"transparent", border:"1px solid #E5E7EB", borderRadius:8, cursor:"pointer", fontSize:12, color:"#6B7280", fontFamily:"Calibri, sans-serif" },
-
   convContainer: { flex:1, maxWidth:720, margin:"0 auto", padding:"24px 24px 16px", width:"100%", display:"flex", flexDirection:"column", gap:12 },
   convChat: { flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:16, paddingBottom:8, maxHeight:"calc(100vh - 300px)", minHeight:200 },
   convMsg: { display:"flex", flexDirection:"column", gap:4 },
@@ -935,7 +929,6 @@ const S = {
   convDoneText: { fontSize:13, color:"#1F4A0A", fontFamily:"Calibri, sans-serif", margin:0 },
   convOptions: { display:"flex", flexDirection:"column", gap:6, marginTop:8, maxWidth:"80%" },
   convOptionBtn: { padding:"9px 14px", background:"#F7F5F0", border:"1.5px solid #E5E7EB", borderRadius:8, cursor:"pointer", fontSize:13, color:"#0A1628", textAlign:"left", fontFamily:"Calibri, sans-serif", transition:"all 0.15s" },
-
   resultsPage: { minHeight:"100vh", background:"#0A1628", display:"flex", flexDirection:"column", fontFamily:"'Palatino Linotype', Palatino, serif" },
   resultsHeader: { padding:"20px 40px", borderBottom:"1px solid #1E3050", display:"flex", alignItems:"center", gap:20 },
   resultsBody: { flex:1, maxWidth:900, margin:"0 auto", padding:"32px 24px 60px", display:"flex", flexDirection:"column", gap:16, width:"100%", overflowY:"auto" },
