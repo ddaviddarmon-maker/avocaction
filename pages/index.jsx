@@ -322,135 +322,227 @@ export default function Home() {
     setConversation(newConv);
 
     const firstUserMsg = newConv.find(m => m.role === "user")?.content || "";
-
-    // ── Après la description initiale → identifier le producteur ──────────
     const alreadyAsked = newConv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
-    const isFirstDescription = newConv.filter(m => m.role === "user").length === 1;
 
-    if (isFirstDescription && !alreadyAsked.includes("producteur")) {
+    // ══════════════════════════════════════════════════════════════════
+    // ÉTAPE 1 — Première description → identifier le producteur
+    // ══════════════════════════════════════════════════════════════════
+    if (newConv.filter(m => m.role === "user").length === 1 && !alreadyAsked.includes("producteur")) {
       setProducteurLoading(true);
       setConversation(prev => [...prev, {
         role:"assistant", id:"producteur_loading",
         content:"Identification du producteur en cours…", options:[]
       }]);
-
       try {
         const text = await callAPI([{ role:"user", content:
           `L'utilisateur décrit ce problème : "${val}"
-
 Identifie le fabricant / producteur / fournisseur principal du produit ou service mentionné.
-Utilise tes connaissances et si nécessaire infère à partir du contexte.
-
 Retourne UNIQUEMENT un JSON :
-{
-  "producteur": "Nom exact de l'entreprise productrice (ex: Apple Inc., Samsung, Netflix...)",
-  "certitude": "haute | moyenne | faible",
-  "explication": "1 phrase expliquant pourquoi (ex: MacBook est un produit fabriqué par Apple)"
-}
-
-Si tu ne peux pas identifier le producteur, retourne {"producteur": null, "certitude": "faible", "explication": "Producteur non identifiable"}`
+{"producteur":"Nom exact","certitude":"haute|moyenne|faible","explication":"1 phrase"}`
         }]);
         const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
         const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
-        let prodData = { producteur: null, certitude: "faible", explication: "" };
-        if (s >= 0 && e > s) prodData = JSON.parse(clean.slice(s, e+1));
-
+        let prodData = { producteur: null, certitude:"faible", explication:"" };
+        if (s>=0 && e>s) prodData = JSON.parse(clean.slice(s,e+1));
         setProducteurLoading(false);
-
-        if (prodData.producteur && prodData.certitude !== "faible") {
-          // Remplacer le message loading par la confirmation
-          setConversation(prev => {
-            const filtered = prev.filter(m => m.id !== "producteur_loading");
+        setConversation(prev => {
+          const filtered = prev.filter(m => m.id !== "producteur_loading");
+          if (prodData.producteur && prodData.certitude !== "faible") {
             return [...filtered, {
-              role: "assistant",
-              id: "producteur",
+              role:"assistant", id:"producteur",
               content: `J'ai identifié le producteur : **${prodData.producteur}**
 ${prodData.explication}
 
 Pouvez-vous confirmer ?`,
               producteur: prodData.producteur,
-              options: [
-                `Oui, c'est bien ${prodData.producteur}`,
-                "Non, ce n'est pas ça",
-                "Je ne sais pas"
-              ]
+              options: [`Oui, c'est bien ${prodData.producteur}`, "Non, ce n'est pas ça", "Je ne sais pas"]
             }];
-          });
-        } else {
-          // Producteur non identifié → demander directement
-          setConversation(prev => {
-            const filtered = prev.filter(m => m.id !== "producteur_loading");
+          } else {
             return [...filtered, {
-              role: "assistant",
-              id: "producteur",
-              content: "Pouvez-vous me préciser le nom de l'entreprise ou du fabricant du produit concerné ?",
-              type: "text_input",
-              options: ["Je ne connais pas le fabricant"]
+              role:"assistant", id:"producteur",
+              content:"Je n'ai pas réussi à identifier le producteur. Connaissez-vous le nom du fabricant ou de l'entreprise concernée ?",
+              type:"producteur_inconnu",
+              options:["Je ne connais pas le fabricant"]
             }];
-          });
-        }
+          }
+        });
       } catch {
         setProducteurLoading(false);
         setConversation(prev => {
           const filtered = prev.filter(m => m.id !== "producteur_loading");
           return [...filtered, {
-            role: "assistant",
-            id: "producteur",
-            content: "Pouvez-vous me préciser le nom de l'entreprise ou du fabricant du produit concerné ?",
-            type: "text_input",
-            options: ["Je ne connais pas le fabricant"]
+            role:"assistant", id:"producteur",
+            content:"Pouvez-vous me préciser le nom du fabricant ou de l'entreprise ?",
+            type:"producteur_inconnu",
+            options:["Je ne connais pas le fabricant"]
           }];
         });
       }
       return;
     }
 
-    // ── Réponse à la confirmation producteur ─────────────────────────────
-    if (alreadyAsked.includes("producteur") && !alreadyAsked.includes("producteur_confirmed")) {
-      // Sauvegarder le producteur confirmé
+    // ══════════════════════════════════════════════════════════════════
+    // ÉTAPE 2 — Réponse à la proposition initiale du producteur
+    // ══════════════════════════════════════════════════════════════════
+    if (alreadyAsked.includes("producteur") && !alreadyAsked.includes("producteur_confirmed") && !alreadyAsked.includes("producteur_question")) {
       const prodMsg = newConv.find(m => m.role === "assistant" && m.id === "producteur");
-      let producteurFinal = val;
-      if (val.startsWith("Oui") && prodMsg?.producteur) {
-        producteurFinal = prodMsg.producteur;
-      } else if (val === "Je ne sais pas" || val === "Je ne connais pas le fabricant") {
-        producteurFinal = "";
+
+      // ── CAS A : Confirmation ──
+      if (val.startsWith("Oui")) {
+        const producteurFinal = prodMsg?.producteur || val.replace(/^Oui, c'est bien /, "");
+        setExtractedData(prev => ({ ...prev, entreprise: producteurFinal }));
+        setConversation(prev => [...prev, {
+          role:"assistant", id:"producteur_confirmed",
+          content:`✓ Producteur enregistré : **${producteurFinal}**`,
+          options:[]
+        }]);
+        setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, producteurFinal), 300);
+        return;
       }
-      setExtractedData(prev => ({ ...prev, entreprise: producteurFinal }));
 
-      // Marquer comme confirmé et passer aux questions suivantes
-      const confirmMsg = {
-        role: "assistant",
-        id: "producteur_confirmed",
-        content: producteurFinal
-          ? `✓ Producteur enregistré : ${producteurFinal}`
-          : "✓ Producteur non renseigné — nous continuerons avec les informations disponibles.",
-        options: []
-      };
-      setConversation(prev => [...prev, confirmMsg]);
-
-      // Lancer la suite des questions
-      const nextQ = getNextConvQuestion([...newConv, confirmMsg], firstUserMsg);
-      if (nextQ) {
-        setTimeout(() => setConversation(prev => [...prev, { role:"assistant", ...nextQ }]), 300);
-      } else {
+      // ── CAS B : "Je ne sais pas" → questions ciblées ──
+      if (val === "Je ne sais pas" || val === "Je ne connais pas le fabricant") {
         setAgentLoading(true);
         try {
           const text = await callAPI([{ role:"user", content:
-            `Extrais les infos et retourne UNIQUEMENT un JSON :
-{"entreprise":"${producteurFinal}","type_produit":"...","probleme":"...","date":"...","prejudice":"...","details":"résumé"}
-Description : ${firstUserMsg}` }]);
+            `L'utilisateur a un problème avec : "${firstUserMsg}"
+Il ne connaît pas le nom du fabricant/producteur.
+Génère 1 à 2 questions courtes et pertinentes pour l'aider à l'identifier.
+Ex: "Où avez-vous acheté ce produit ?", "Quelle est la marque affichée sur l'emballage ?", "Sur quelle plateforme avez-vous souscrit ?"
+Retourne UNIQUEMENT un JSON : {"question":"ta question ici"}`
+          }]);
           const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
-          const s = clean.indexOf("{"), e2 = clean.lastIndexOf("}");
-          if (s>=0 && e2>s) setExtractedData(JSON.parse(clean.slice(s,e2+1)));
-        } catch {}
+          const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+          let q = { question:"Pouvez-vous décrire où vous avez acheté ce produit ou quelle marque est indiquée ?" };
+          if (s>=0 && e>s) q = JSON.parse(clean.slice(s,e+1));
+          setAgentLoading(false);
+          setConversation(prev => [...prev, {
+            role:"assistant", id:"producteur_question",
+            content: q.question,
+            type:"text_input",
+            options:["Je ne sais vraiment pas"]
+          }]);
+        } catch {
+          setAgentLoading(false);
+          setConversation(prev => [...prev, {
+            role:"assistant", id:"producteur_question",
+            content:"Quelle marque est indiquée sur le produit ou l'emballage ?",
+            type:"text_input",
+            options:["Je ne sais vraiment pas"]
+          }]);
+        }
+        return;
+      }
+
+      // ── CAS C : "Non, ce n'est pas ça" → demander s'il connaît ──
+      setConversation(prev => [...prev, {
+        role:"assistant", id:"producteur_question",
+        content:"Connaissez-vous le nom du vrai fabricant ou de l'entreprise concernée ?",
+        type:"text_input",
+        options:["Je ne connais pas le fabricant"]
+      }]);
+      return;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ÉTAPE 3 — Réponse à la question de précision sur le producteur
+    // ══════════════════════════════════════════════════════════════════
+    if (alreadyAsked.includes("producteur_question") && !alreadyAsked.includes("producteur_confirmed")) {
+
+      // ── CAS : abandon total ──
+      if (val === "Je ne sais vraiment pas" || val === "Je ne connais pas le fabricant") {
+        setExtractedData(prev => ({ ...prev, entreprise:"Producteur inconnu" }));
+        setConversation(prev => [...prev, {
+          role:"assistant", id:"producteur_confirmed",
+          content:"✓ Producteur non identifié — enregistré comme « Producteur inconnu ».",
+          options:[]
+        }]);
+        setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, "Producteur inconnu"), 300);
+        return;
+      }
+
+      // ── CAS : l'utilisateur donne un nom → vérifier orthographe et cohérence ──
+      setAgentLoading(true);
+      try {
+        const text = await callAPI([{ role:"user", content:
+          `L'utilisateur a décrit ce problème : "${firstUserMsg}"
+Il indique que le producteur est : "${val}"
+Vérifie l'orthographe et la cohérence. Corrige si nécessaire.
+Retourne UNIQUEMENT un JSON :
+{"producteur_corrige":"nom corrigé exact","coherent":true/false,"explication":"1 phrase si correction"}`
+        }]);
+        const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
+        const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+        let check = { producteur_corrige: val, coherent:true, explication:"" };
+        if (s>=0 && e>s) check = JSON.parse(clean.slice(s,e+1));
         setAgentLoading(false);
-        setConversation(prev => [...prev, { role:"assistant", id:"fin", content:"Merci, j'ai toutes les informations.", options:[] }]);
-        setConversationDone(true);
+
+        if (check.coherent) {
+          // Proposer la version corrigée pour confirmation
+          setConversation(prev => [...prev, {
+            role:"assistant", id:"producteur_reconfirm",
+            content: check.producteur_corrige !== val
+              ? `J'ai corrigé : **${check.producteur_corrige}**
+${check.explication}
+
+Pouvez-vous confirmer ?`
+              : `Confirmer **${check.producteur_corrige}** comme producteur ?`,
+            producteur: check.producteur_corrige,
+            options:[`Oui, c'est bien ${check.producteur_corrige}`, "Non, ce n'est pas ça"]
+          }]);
+        } else {
+          // Incohérent → entrée en base comme inconnu
+          setExtractedData(prev => ({ ...prev, entreprise:"Producteur inconnu" }));
+          setConversation(prev => [...prev, {
+            role:"assistant", id:"producteur_confirmed",
+            content:`Je n'ai pas pu valider ce producteur. Enregistré comme « Producteur inconnu ». ${check.explication}`,
+            options:[]
+          }]);
+          setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, "Producteur inconnu"), 300);
+        }
+      } catch {
+        setAgentLoading(false);
+        setExtractedData(prev => ({ ...prev, entreprise: val }));
+        setConversation(prev => [...prev, {
+          role:"assistant", id:"producteur_confirmed",
+          content:`✓ Producteur enregistré : **${val}**`,
+          options:[]
+        }]);
+        setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, val), 300);
       }
       return;
     }
 
-    // ── Questions normales (date, preuves…) ───────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+    // ÉTAPE 4 — Re-confirmation après correction orthographe
+    // ══════════════════════════════════════════════════════════════════
+    if (alreadyAsked.includes("producteur_reconfirm") && !alreadyAsked.includes("producteur_confirmed")) {
+      const reconfMsg = newConv.find(m => m.role === "assistant" && m.id === "producteur_reconfirm");
+      if (val.startsWith("Oui")) {
+        const producteurFinal = reconfMsg?.producteur || val.replace(/^Oui, c'est bien /, "");
+        setExtractedData(prev => ({ ...prev, entreprise: producteurFinal }));
+        setConversation(prev => [...prev, {
+          role:"assistant", id:"producteur_confirmed",
+          content:`✓ Producteur enregistré : **${producteurFinal}**`,
+          options:[]
+        }]);
+        setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, producteurFinal), 300);
+      } else {
+        // Abandon après 2e refus → inconnu
+        setExtractedData(prev => ({ ...prev, entreprise:"Producteur inconnu" }));
+        setConversation(prev => [...prev, {
+          role:"assistant", id:"producteur_confirmed",
+          content:"✓ Producteur non identifié — enregistré comme « Producteur inconnu ».",
+          options:[]
+        }]);
+        setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, "Producteur inconnu"), 300);
+      }
+      return;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // SUITE NORMALE — Questions date, preuves…
+    // ══════════════════════════════════════════════════════════════════
     const nextQ = getNextConvQuestion(newConv, firstUserMsg);
     if (nextQ) {
       setConversation(prev => [...prev, { role:"assistant", ...nextQ }]);
@@ -469,8 +561,35 @@ Données collectées : ${JSON.stringify(convData)}` }]);
         if (s>=0 && e>s) setExtractedData(JSON.parse(clean.slice(s,e+1)));
       } catch {}
       setAgentLoading(false);
-      setConversation(prev => [...prev, { role:"assistant", id:"fin",
-        content:"Merci, j'ai toutes les informations.", options:[] }]);
+      setConversation(prev => [...prev, {
+        role:"assistant", id:"fin",
+        content:"Merci, j'ai toutes les informations.", options:[]
+      }]);
+      setConversationDone(true);
+    }
+  }
+
+  // Fonction utilitaire — continuer après confirmation producteur
+  async function continueAfterProducteur(newConv, firstUserMsg, producteurFinal) {
+    const nextQ = getNextConvQuestion(newConv, firstUserMsg);
+    if (nextQ) {
+      setConversation(prev => [...prev, { role:"assistant", ...nextQ }]);
+    } else {
+      setAgentLoading(true);
+      try {
+        const text = await callAPI([{ role:"user", content:
+          `Extrais les infos et retourne UNIQUEMENT un JSON :
+{"entreprise":"${producteurFinal}","type_produit":"...","probleme":"...","date":"...","prejudice":"...","details":"résumé"}
+Description : ${firstUserMsg}` }]);
+        const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
+        const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+        if (s>=0 && e>s) setExtractedData(JSON.parse(clean.slice(s,e+1)));
+      } catch {}
+      setAgentLoading(false);
+      setConversation(prev => [...prev, {
+        role:"assistant", id:"fin",
+        content:"Merci, j'ai toutes les informations.", options:[]
+      }]);
       setConversationDone(true);
     }
   }
