@@ -724,9 +724,16 @@ Description : ${firstUserMsg}` }]);
     setIsLoading(false);
   }
 
-  function buildPrompt(a) {
-    const lignes = Object.entries(a).filter(([k, v]) => v).map(([k, v]) => `- ${k.replace(/_/g, " ")} : ${v}`).join("\n");
-    return `Tu es AVOCACTION, agent IA spécialisé en droit de la consommation français (loi n° 2025-391 du 30 avril 2025).
+  // ── REMPLACE la fonction buildPrompt dans index.jsx ──────────────
+// Cherche "function buildPrompt(a) {" et remplace TOUTE la fonction par ceci :
+
+function buildPrompt(a) {
+  const lignes = Object.entries(a)
+    .filter(([k, v]) => v)
+    .map(([k, v]) => `- ${k.replace(/_/g, " ")} : ${v}`)
+    .join("\n");
+
+  return `Tu es AVOCACTION, agent IA spécialisé en droit de la consommation français (loi n° 2025-391 du 30 avril 2025).
 
 Points de droit clés :
 - Prescription produit : 2 ans Art. L217-4 C. conso
@@ -737,10 +744,23 @@ Points de droit clés :
 Données collectées :
 ${lignes}
 
-Retourne UNIQUEMENT un JSON valide :
+═══════════════════════════════════════════════════════
+ÉTAPE 1 OBLIGATOIRE — RECHERCHE WEB AVANT TOUT SCORING
+Tu DOIS utiliser web_search AVANT de calculer les scores.
+Lance ces recherches :
+1. "${a.entreprise || "l'entreprise"} action de groupe France"
+2. "${a.entreprise || "l'entreprise"} recours collectif consommateurs"
+3. Si pertinent : "${a.type_produit || a.probleme || ""} action groupe France 2024 2025"
+
+Les scores doivent refléter ce que tu trouves RÉELLEMENT.
+Si tu ne trouves rien → compatibilite et similarite faibles (< 40).
+Si tu trouves une action en cours → compatibilite élevée (> 70).
+═══════════════════════════════════════════════════════
+
+ÉTAPE 2 — Retourne UNIQUEMENT ce JSON valide (après tes recherches) :
 {
   "entreprise": "nom identifié",
-  "resume": "2-3 phrases résumant la situation de façon claire et personnalisée",
+  "resume": "2-3 phrases résumant la situation de façon claire et personnalisée, en mentionnant ce que tu as trouvé sur le web",
   "prescription": {
     "statut": "favorable | attention | urgent",
     "message": "explication précise des délais applicables selon le type de problème",
@@ -748,24 +768,24 @@ Retourne UNIQUEMENT un JSON valide :
   },
   "rappel": {
     "existe": true/false,
-    "message": "détail sur le rappel ou l'alerte"
+    "message": "détail sur le rappel ou l'alerte — basé sur tes recherches"
   },
   "action_groupe": {
     "potentiel": "élevé | moyen | faible",
-    "message": "explication du potentiel d'action collective"
+    "message": "cite les actions RÉELLES que tu as trouvées, ou explique pourquoi aucune n'existe encore"
   },
   "scores": {
-    "compatibilite": <0-100>,
-    "similarite": <0-100>,
-    "faisabilite": <0-100>,
+    "compatibilite": <0-100 — basé sur actions trouvées sur le web>,
+    "similarite": <0-100 — basé sur témoignages/cas similaires trouvés>,
+    "faisabilite": <0-100 — basé sur critères légaux + preuves disponibles>,
     "global": <moyenne arrondie des 3 scores>
   },
   "recommandation": "conseil personnalisé et actionnable en 2-3 phrases",
   "etapes": ["action prioritaire 1", "action prioritaire 2", "action prioritaire 3"],
-  "urgence": "haute | normale | faible"
+  "urgence": "haute | normale | faible",
+  "source_recherche": "résumé en 1 phrase de ce que tu as trouvé ou non sur le web"
 }`;
-  }
-
+}
   function reset() {
     setStarted(false); setPhase("debut"); setDebutIndex(0); setDebutAnswers({});
     setClarif(null); setClarifInput(""); setConversation([]); setUserInput("");
