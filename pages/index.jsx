@@ -292,8 +292,7 @@ export default function Home() {
     const d = desc.toLowerCase();
     const asked = conv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
 
-    if (!asked.includes("date") && !d.match(/20(2[0-9])|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|mois|semaine|hier|cette année/)) {
-      return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date",
+if (!asked.includes("date") && !d.match(/20(2[0-9])|\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b|il y a \d|depuis \d|hier|cette année|l.an dernier/)) {      return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date",
         placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     }
     if (!asked.includes("corpo") && (d.includes("malade") || d.includes("symptôme") || d.includes("nausée") || d.includes("vomis") || d.includes("blessé") || d.includes("allergi") || d.includes("hospitali") || d.includes("bébé") || d.includes("enfant"))) {
