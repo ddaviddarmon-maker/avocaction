@@ -1,9 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 
-// ═══════════════════════════════════════════════════════════
-// BLOC 1 — Questions fixes de début (1-3)
-// ═══════════════════════════════════════════════════════════
 const STEPS_DEBUT = [
   {
     id: "cadre", label: "Cadre",
@@ -40,9 +37,6 @@ const STEPS_DEBUT = [
   },
 ];
 
-// ═══════════════════════════════════════════════════════════
-// BLOC 3 — Questions fixes de fin
-// ═══════════════════════════════════════════════════════════
 const STEPS_FIN = [
   {
     id: "similaires", label: "Collectif",
@@ -69,70 +63,36 @@ const STEPS_FIN = [
   {
     id: "prejudice_corpo_detail", label: "Type de préjudice corporel",
     question: "Quel type de préjudice corporel avez-vous subi ?",
-    options: [
-      "Blessure légère",
-      "Problème de santé / maladie",
-      "Hospitalisation",
-      "Séquelles durables",
-      "Décès d'un proche",
-      "Autre",
-    ],
+    options: ["Blessure légère", "Problème de santé / maladie", "Hospitalisation", "Séquelles durables", "Décès d'un proche", "Autre"],
     multiSelect: true,
     skipIf: (a) => a.prejudice_corpo !== "Oui",
   },
   {
     id: "prejudice_corpo_medical", label: "Suivi médical",
     question: "Avez-vous consulté un médecin ou été hospitalisé suite à ce problème ?",
-    options: [
-      "Oui, consultation médicale",
-      "Oui, hospitalisation",
-      "Non, pas encore consulté",
-      "Non, pas nécessaire",
-    ],
+    options: ["Oui, consultation médicale", "Oui, hospitalisation", "Non, pas encore consulté", "Non, pas nécessaire"],
     skipIf: (a) => a.prejudice_corpo !== "Oui",
   },
   {
     id: "demarches", label: "Démarches",
     question: "Avez-vous déjà contacté l'entreprise pour résoudre le problème ?",
-    options: [
-      "Oui, ma demande a été refusée",
-      "Oui, mais je n'ai pas reçu de réponse",
-      "Oui, en cours de traitement",
-      "Non, pas encore",
-    ],
+    options: ["Oui, ma demande a été refusée", "Oui, mais je n'ai pas reçu de réponse", "Oui, en cours de traitement", "Non, pas encore"],
   },
   {
     id: "montant", label: "Montant",
     question: "Avez-vous une idée du montant financier du préjudice ?",
-    options: [
-      "Moins de 50€",
-      "Entre 50€ et 300€",
-      "Entre 300€ et 1 000€",
-      "Plus de 1 000€",
-      "Je ne sais pas / préjudice non financier",
-    ],
+    options: ["Moins de 50€", "Entre 50€ et 300€", "Entre 300€ et 1 000€", "Plus de 1 000€", "Je ne sais pas / préjudice non financier"],
   },
   {
     id: "documents", label: "Preuves",
     question: "Disposez-vous de documents liés à cette situation ?",
-    options: [
-      "Facture / preuve d'achat",
-      "Contrat ou conditions générales",
-      "Échanges avec l'entreprise",
-      "Photos / captures d'écran",
-      "Documents médicaux",
-      "Plusieurs de ces éléments",
-      "Aucun document",
-    ],
+    options: ["Facture / preuve d'achat", "Contrat ou conditions générales", "Échanges avec l'entreprise", "Photos / captures d'écran", "Documents médicaux", "Plusieurs de ces éléments", "Aucun document"],
     multiSelect: true,
   },
   {
     id: "rgpd_consent", label: "Consentement",
     question: "Souhaitez-vous que vos informations soient sauvegardées pour bénéficier de la veille automatique et des alertes de prescription ?",
-    options: [
-      "Oui, j'accepte la sauvegarde et les alertes",
-      "Non, analyse unique sans sauvegarde",
-    ],
+    options: ["Oui, j'accepte la sauvegarde et les alertes", "Non, analyse unique sans sauvegarde"],
   },
   {
     id: "participation", label: "Action collective",
@@ -142,7 +102,6 @@ const STEPS_FIN = [
   },
 ];
 
-// ── Composant champ date dans conversation ────────────────
 function ConvDateInput({ placeholder, onSubmit }) {
   const [val, setVal] = useState("");
   return (
@@ -155,9 +114,7 @@ function ConvDateInput({ placeholder, onSubmit }) {
         onKeyDown={e => { if (e.key === "Enter" && val.trim()) onSubmit(val); }}
         autoFocus
       />
-      <button
-        onClick={() => { if (val.trim()) onSubmit(val); }}
-        disabled={!val.trim()}
+      <button onClick={() => { if (val.trim()) onSubmit(val); }} disabled={!val.trim()}
         style={{ padding:"9px 14px", background:"#0A1628", color:"#C9A84C", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, opacity: val.trim() ? 1 : 0.4 }}>
         →
       </button>
@@ -165,12 +122,9 @@ function ConvDateInput({ placeholder, onSubmit }) {
   );
 }
 
-// ── Composant multi-select dans conversation ──────────────
 function ConvMultiSelect({ options, onSubmit }) {
   const [selected, setSelected] = useState([]);
-  const toggle = (opt) => setSelected(prev =>
-    prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]
-  );
+  const toggle = (opt) => setSelected(prev => prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]);
   return (
     <div style={{ marginTop:8, maxWidth:"80%", display:"flex", flexDirection:"column", gap:6 }}>
       {options.map((opt, i) => {
@@ -185,9 +139,7 @@ function ConvMultiSelect({ options, onSubmit }) {
           </button>
         );
       })}
-      <button
-        onClick={() => { if (selected.length > 0) onSubmit(selected.join(", ")); }}
-        disabled={selected.length === 0}
+      <button onClick={() => { if (selected.length > 0) onSubmit(selected.join(", ")); }} disabled={selected.length === 0}
         style={{ padding:"9px 14px", background:"#0A1628", color:"#C9A84C", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif", opacity: selected.length > 0 ? 1 : 0.4, marginTop:4 }}>
         Valider ({selected.length}) →
       </button>
@@ -198,55 +150,37 @@ function ConvMultiSelect({ options, onSubmit }) {
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState("debut");
-
-  // Bloc 1
   const [debutIndex, setDebutIndex] = useState(0);
   const [debutAnswers, setDebutAnswers] = useState({});
   const [clarif, setClarif] = useState(null);
   const [clarifInput, setClarifInput] = useState("");
-
-  // Bloc 2 — conversation
   const [conversation, setConversation] = useState([]);
   const [userInput, setUserInput] = useState("");
   const [agentLoading, setAgentLoading] = useState(false);
   const [conversationDone, setConversationDone] = useState(false);
   const [extractedData, setExtractedData] = useState({});
-
-  // Bloc 3
   const [finIndex, setFinIndex] = useState(0);
   const [finAnswers, setFinAnswers] = useState({});
   const [multiSelected, setMultiSelected] = useState([]);
-
-  // Identification producteur
   const [producteurLoading, setProducteurLoading] = useState(false);
-
-  // Formulaire contact RGPD
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactInfo, setContactInfo] = useState({ nom:"", prenom:"", email:"", telephone:"", adresse:"" });
   const [contactErrors, setContactErrors] = useState({});
   const [pendingFinAnswers, setPendingFinAnswers] = useState(null);
-
-  // Résultats
   const [isLoading, setIsLoading] = useState(false);
   const [analyse, setAnalyse] = useState(null);
-
   const chatEndRef = useRef(null);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation, agentLoading]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conversation, agentLoading]);
 
-  // ── API helper ───────────────────────────────────────────
- function extractText(data) {
-  // Priorité au champ reply (déjà le dernier bloc texte depuis chat.js)
-  if (data.reply) return data.reply;
-  if (Array.isArray(data.content)) {
-    // Prendre le DERNIER bloc texte (après les recherches web)
-    const textBlocks = data.content.filter(b => b.type === "text" && b.text);
-    if (textBlocks.length > 0) return textBlocks[textBlocks.length - 1].text;
+  function extractText(data) {
+    if (data.reply) return data.reply;
+    if (Array.isArray(data.content)) {
+      const textBlocks = data.content.filter(b => b.type === "text" && b.text);
+      if (textBlocks.length > 0) return textBlocks[textBlocks.length - 1].text;
+    }
+    return data.message || data.text || JSON.stringify(data);
   }
-  return data.message || data.text || JSON.stringify(data);
-}
 
   async function callAPI(messages, system) {
     const body = system ? { messages, system } : { messages };
@@ -259,9 +193,6 @@ export default function Home() {
     return extractText(await response.json());
   }
 
-  // ═══════════════════════════════════════════════════════
-  // BLOC 1
-  // ═══════════════════════════════════════════════════════
   const currentDebutStep = STEPS_DEBUT[debutIndex];
 
   function handleDebutOption(option) {
@@ -285,14 +216,18 @@ export default function Home() {
     }
   }
 
-  // ═══════════════════════════════════════════════════════
-  // BLOC 2 — Agent conversationnel
-  // ═══════════════════════════════════════════════════════
+  // ── FIX : regex date plus précise ──────────────────────────────
   function getNextConvQuestion(conv, desc) {
     const d = desc.toLowerCase();
     const asked = conv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
 
-if (!asked.includes("date") && !d.match(/20(2[0-9])|\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b|il y a \d|depuis \d|hier|cette année|l.an dernier/)) {      return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date",
+    // Détecte une vraie date mentionnée (année, ou mois + contexte temporel)
+    const hasDate = /20(2[0-9])/.test(d) ||
+      /\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b/.test(d) ||
+      /il y a \d|depuis \d+ (an|mois)|l.an dernier|l.année dernière|hier/.test(d);
+
+    if (!asked.includes("date") && !hasDate) {
+      return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date",
         placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     }
     if (!asked.includes("corpo") && (d.includes("malade") || d.includes("symptôme") || d.includes("nausée") || d.includes("vomis") || d.includes("blessé") || d.includes("allergi") || d.includes("hospitali") || d.includes("bébé") || d.includes("enfant"))) {
@@ -307,8 +242,7 @@ if (!asked.includes("date") && !d.match(/20(2[0-9])|\b(janvier|février|mars|avr
   }
 
   function startConversation(answers) {
-    setConversation([{ role:"assistant", id:"intro",
-      content:"Décrivez votre problème en quelques mots.", options:[] }]);
+    setConversation([{ role:"assistant", id:"intro", content:"Décrivez votre problème en quelques mots.", options:[] }]);
   }
 
   async function sendMessage(optionalValue) {
@@ -317,31 +251,22 @@ if (!asked.includes("date") && !d.match(/20(2[0-9])|\b(janvier|février|mars|avr
     setUserInput("");
 
     const lastAgent = conversation[conversation.length - 1];
-    if (lastAgent?.id && lastAgent.role === "assistant") {
-      lastAgent.userAnswer = val;
-    }
+    if (lastAgent?.id && lastAgent.role === "assistant") lastAgent.userAnswer = val;
     const newConv = [...conversation, { role:"user", content: val }];
     setConversation(newConv);
 
     const firstUserMsg = newConv.find(m => m.role === "user")?.content || "";
     const alreadyAsked = newConv.filter(m => m.role === "assistant" && m.id).map(m => m.id);
 
-    // ══════════════════════════════════════════════════════════════════
-    // ÉTAPE 1 — Première description → identifier le producteur
-    // ══════════════════════════════════════════════════════════════════
     if (newConv.filter(m => m.role === "user").length === 1 && !alreadyAsked.includes("producteur")) {
       setProducteurLoading(true);
-      setConversation(prev => [...prev, {
-        role:"assistant", id:"producteur_loading",
-        content:"Identification du producteur en cours…", options:[]
-      }]);
+      setConversation(prev => [...prev, { role:"assistant", id:"producteur_loading", content:"Identification du producteur en cours…", options:[] }]);
       try {
         const text = await callAPI([{ role:"user", content:
           `L'utilisateur décrit ce problème : "${val}"
 Identifie le fabricant / producteur / fournisseur principal du produit ou service mentionné.
 Retourne UNIQUEMENT un JSON :
-{"producteur":"Nom exact","certitude":"haute|moyenne|faible","explication":"1 phrase"}`
-        }]);
+{"producteur":"Nom exact","certitude":"haute|moyenne|faible","explication":"1 phrase"}` }]);
         const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
         const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
         let prodData = { producteur: null, certitude:"faible", explication:"" };
@@ -350,201 +275,121 @@ Retourne UNIQUEMENT un JSON :
         setConversation(prev => {
           const filtered = prev.filter(m => m.id !== "producteur_loading");
           if (prodData.producteur && prodData.certitude !== "faible") {
-            return [...filtered, {
-              role:"assistant", id:"producteur",
-              content: `J'ai identifié le producteur : **${prodData.producteur}**
-${prodData.explication}
-
-Pouvez-vous confirmer ?`,
+            return [...filtered, { role:"assistant", id:"producteur",
+              content: `J'ai identifié le producteur : **${prodData.producteur}**\n${prodData.explication}\n\nPouvez-vous confirmer ?`,
               producteur: prodData.producteur,
-              options: [`Oui, c'est bien ${prodData.producteur}`, "Non, ce n'est pas ça", "Je ne sais pas"]
-            }];
+              options: [`Oui, c'est bien ${prodData.producteur}`, "Non, ce n'est pas ça", "Je ne sais pas"] }];
           } else {
-            return [...filtered, {
-              role:"assistant", id:"producteur",
+            return [...filtered, { role:"assistant", id:"producteur",
               content:"Je n'ai pas réussi à identifier le producteur. Connaissez-vous le nom du fabricant ou de l'entreprise concernée ?",
-              type:"producteur_inconnu",
-              options:["Je ne connais pas le fabricant"]
-            }];
+              type:"producteur_inconnu", options:["Je ne connais pas le fabricant"] }];
           }
         });
       } catch {
         setProducteurLoading(false);
         setConversation(prev => {
           const filtered = prev.filter(m => m.id !== "producteur_loading");
-          return [...filtered, {
-            role:"assistant", id:"producteur",
+          return [...filtered, { role:"assistant", id:"producteur",
             content:"Pouvez-vous me préciser le nom du fabricant ou de l'entreprise ?",
-            type:"producteur_inconnu",
-            options:["Je ne connais pas le fabricant"]
-          }];
+            type:"producteur_inconnu", options:["Je ne connais pas le fabricant"] }];
         });
       }
       return;
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // ÉTAPE 2 — Réponse à la proposition initiale du producteur
-    // ══════════════════════════════════════════════════════════════════
     if (alreadyAsked.includes("producteur") && !alreadyAsked.includes("producteur_confirmed") && !alreadyAsked.includes("producteur_question")) {
       const prodMsg = newConv.find(m => m.role === "assistant" && m.id === "producteur");
-
-      // ── CAS A : Confirmation ──
       if (val.startsWith("Oui")) {
         const producteurFinal = prodMsg?.producteur || val.replace(/^Oui, c'est bien /, "");
         setExtractedData(prev => ({ ...prev, entreprise: producteurFinal }));
-        setConversation(prev => [...prev, {
-          role:"assistant", id:"producteur_confirmed",
-          content:`✓ Producteur enregistré : **${producteurFinal}**`,
-          options:[]
-        }]);
+        setConversation(prev => [...prev, { role:"assistant", id:"producteur_confirmed",
+          content:`✓ Producteur enregistré : **${producteurFinal}**`, options:[] }]);
         setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, producteurFinal), 300);
         return;
       }
-
-      // ── CAS B : "Je ne sais pas" → questions ciblées ──
       if (val === "Je ne sais pas" || val === "Je ne connais pas le fabricant") {
         setAgentLoading(true);
         try {
           const text = await callAPI([{ role:"user", content:
-            `L'utilisateur a un problème avec : "${firstUserMsg}"
-Il ne connaît pas le nom du fabricant/producteur.
-Génère 1 à 2 questions courtes et pertinentes pour l'aider à l'identifier.
-Ex: "Où avez-vous acheté ce produit ?", "Quelle est la marque affichée sur l'emballage ?", "Sur quelle plateforme avez-vous souscrit ?"
-Retourne UNIQUEMENT un JSON : {"question":"ta question ici"}`
-          }]);
+            `L'utilisateur a un problème avec : "${firstUserMsg}"\nIl ne connaît pas le nom du fabricant/producteur.\nGénère 1 question courte pour l'aider à l'identifier.\nRetourne UNIQUEMENT un JSON : {"question":"ta question ici"}` }]);
           const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
           const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
           let q = { question:"Pouvez-vous décrire où vous avez acheté ce produit ou quelle marque est indiquée ?" };
           if (s>=0 && e>s) q = JSON.parse(clean.slice(s,e+1));
           setAgentLoading(false);
-          setConversation(prev => [...prev, {
-            role:"assistant", id:"producteur_question",
-            content: q.question,
-            type:"text_input",
-            options:["Je ne sais vraiment pas"]
-          }]);
+          setConversation(prev => [...prev, { role:"assistant", id:"producteur_question",
+            content: q.question, type:"text_input", options:["Je ne sais vraiment pas"] }]);
         } catch {
           setAgentLoading(false);
-          setConversation(prev => [...prev, {
-            role:"assistant", id:"producteur_question",
+          setConversation(prev => [...prev, { role:"assistant", id:"producteur_question",
             content:"Quelle marque est indiquée sur le produit ou l'emballage ?",
-            type:"text_input",
-            options:["Je ne sais vraiment pas"]
-          }]);
+            type:"text_input", options:["Je ne sais vraiment pas"] }]);
         }
         return;
       }
-
-      // ── CAS C : "Non, ce n'est pas ça" → demander s'il connaît ──
-      setConversation(prev => [...prev, {
-        role:"assistant", id:"producteur_question",
+      setConversation(prev => [...prev, { role:"assistant", id:"producteur_question",
         content:"Connaissez-vous le nom du vrai fabricant ou de l'entreprise concernée ?",
-        type:"text_input",
-        options:["Je ne connais pas le fabricant"]
-      }]);
+        type:"text_input", options:["Je ne connais pas le fabricant"] }]);
       return;
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // ÉTAPE 3 — Réponse à la question de précision sur le producteur
-    // ══════════════════════════════════════════════════════════════════
     if (alreadyAsked.includes("producteur_question") && !alreadyAsked.includes("producteur_confirmed")) {
-
-      // ── CAS : abandon total ──
       if (val === "Je ne sais vraiment pas" || val === "Je ne connais pas le fabricant") {
         setExtractedData(prev => ({ ...prev, entreprise:"Producteur inconnu" }));
-        setConversation(prev => [...prev, {
-          role:"assistant", id:"producteur_confirmed",
-          content:"✓ Producteur non identifié — enregistré comme « Producteur inconnu ».",
-          options:[]
-        }]);
+        setConversation(prev => [...prev, { role:"assistant", id:"producteur_confirmed",
+          content:"✓ Producteur non identifié — enregistré comme « Producteur inconnu ».", options:[] }]);
         setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, "Producteur inconnu"), 300);
         return;
       }
-
-      // ── CAS : l'utilisateur donne un nom → vérifier orthographe et cohérence ──
       setAgentLoading(true);
       try {
         const text = await callAPI([{ role:"user", content:
-          `L'utilisateur a décrit ce problème : "${firstUserMsg}"
-Il indique que le producteur est : "${val}"
-Vérifie l'orthographe et la cohérence. Corrige si nécessaire.
-Retourne UNIQUEMENT un JSON :
-{"producteur_corrige":"nom corrigé exact","coherent":true/false,"explication":"1 phrase si correction"}`
-        }]);
+          `L'utilisateur indique que le producteur est : "${val}"\nVérifie l'orthographe et la cohérence.\nRetourne UNIQUEMENT un JSON :\n{"producteur_corrige":"nom corrigé exact","coherent":true,"explication":"1 phrase si correction"}` }]);
         const clean = text.replace(/\`\`\`json|\`\`\`/g,"").trim();
         const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
         let check = { producteur_corrige: val, coherent:true, explication:"" };
         if (s>=0 && e>s) check = JSON.parse(clean.slice(s,e+1));
         setAgentLoading(false);
-
         if (check.coherent) {
-          // Proposer la version corrigée pour confirmation
-          setConversation(prev => [...prev, {
-            role:"assistant", id:"producteur_reconfirm",
+          setConversation(prev => [...prev, { role:"assistant", id:"producteur_reconfirm",
             content: check.producteur_corrige !== val
-              ? `J'ai corrigé : **${check.producteur_corrige}**
-${check.explication}
-
-Pouvez-vous confirmer ?`
+              ? `J'ai corrigé : **${check.producteur_corrige}**\n${check.explication}\n\nPouvez-vous confirmer ?`
               : `Confirmer **${check.producteur_corrige}** comme producteur ?`,
             producteur: check.producteur_corrige,
-            options:[`Oui, c'est bien ${check.producteur_corrige}`, "Non, ce n'est pas ça"]
-          }]);
+            options:[`Oui, c'est bien ${check.producteur_corrige}`, "Non, ce n'est pas ça"] }]);
         } else {
-          // Incohérent → entrée en base comme inconnu
           setExtractedData(prev => ({ ...prev, entreprise:"Producteur inconnu" }));
-          setConversation(prev => [...prev, {
-            role:"assistant", id:"producteur_confirmed",
-            content:`Je n'ai pas pu valider ce producteur. Enregistré comme « Producteur inconnu ». ${check.explication}`,
-            options:[]
-          }]);
+          setConversation(prev => [...prev, { role:"assistant", id:"producteur_confirmed",
+            content:`Je n'ai pas pu valider ce producteur. Enregistré comme « Producteur inconnu ». ${check.explication}`, options:[] }]);
           setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, "Producteur inconnu"), 300);
         }
       } catch {
         setAgentLoading(false);
         setExtractedData(prev => ({ ...prev, entreprise: val }));
-        setConversation(prev => [...prev, {
-          role:"assistant", id:"producteur_confirmed",
-          content:`✓ Producteur enregistré : **${val}**`,
-          options:[]
-        }]);
+        setConversation(prev => [...prev, { role:"assistant", id:"producteur_confirmed",
+          content:`✓ Producteur enregistré : **${val}**`, options:[] }]);
         setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, val), 300);
       }
       return;
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // ÉTAPE 4 — Re-confirmation après correction orthographe
-    // ══════════════════════════════════════════════════════════════════
     if (alreadyAsked.includes("producteur_reconfirm") && !alreadyAsked.includes("producteur_confirmed")) {
       const reconfMsg = newConv.find(m => m.role === "assistant" && m.id === "producteur_reconfirm");
       if (val.startsWith("Oui")) {
         const producteurFinal = reconfMsg?.producteur || val.replace(/^Oui, c'est bien /, "");
         setExtractedData(prev => ({ ...prev, entreprise: producteurFinal }));
-        setConversation(prev => [...prev, {
-          role:"assistant", id:"producteur_confirmed",
-          content:`✓ Producteur enregistré : **${producteurFinal}**`,
-          options:[]
-        }]);
+        setConversation(prev => [...prev, { role:"assistant", id:"producteur_confirmed",
+          content:`✓ Producteur enregistré : **${producteurFinal}**`, options:[] }]);
         setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, producteurFinal), 300);
       } else {
-        // Abandon après 2e refus → inconnu
         setExtractedData(prev => ({ ...prev, entreprise:"Producteur inconnu" }));
-        setConversation(prev => [...prev, {
-          role:"assistant", id:"producteur_confirmed",
-          content:"✓ Producteur non identifié — enregistré comme « Producteur inconnu ».",
-          options:[]
-        }]);
+        setConversation(prev => [...prev, { role:"assistant", id:"producteur_confirmed",
+          content:"✓ Producteur non identifié — enregistré comme « Producteur inconnu ».", options:[] }]);
         setTimeout(() => continueAfterProducteur(newConv, firstUserMsg, "Producteur inconnu"), 300);
       }
       return;
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // SUITE NORMALE — Questions date, preuves…
-    // ══════════════════════════════════════════════════════════════════
     const nextQ = getNextConvQuestion(newConv, firstUserMsg);
     if (nextQ) {
       setConversation(prev => [...prev, { role:"assistant", ...nextQ }]);
@@ -563,15 +408,12 @@ Données collectées : ${JSON.stringify(convData)}` }]);
         if (s>=0 && e>s) setExtractedData(JSON.parse(clean.slice(s,e+1)));
       } catch {}
       setAgentLoading(false);
-      setConversation(prev => [...prev, {
-        role:"assistant", id:"fin",
-        content:"Merci, j'ai toutes les informations.", options:[]
-      }]);
+      setConversation(prev => [...prev, { role:"assistant", id:"fin",
+        content:"Merci, j'ai toutes les informations.", options:[] }]);
       setConversationDone(true);
     }
   }
 
-  // Fonction utilitaire — continuer après confirmation producteur
   async function continueAfterProducteur(newConv, firstUserMsg, producteurFinal) {
     const nextQ = getNextConvQuestion(newConv, firstUserMsg);
     if (nextQ) {
@@ -588,22 +430,14 @@ Description : ${firstUserMsg}` }]);
         if (s>=0 && e>s) setExtractedData(JSON.parse(clean.slice(s,e+1)));
       } catch {}
       setAgentLoading(false);
-      setConversation(prev => [...prev, {
-        role:"assistant", id:"fin",
-        content:"Merci, j'ai toutes les informations.", options:[]
-      }]);
+      setConversation(prev => [...prev, { role:"assistant", id:"fin",
+        content:"Merci, j'ai toutes les informations.", options:[] }]);
       setConversationDone(true);
     }
   }
 
-  function passToFin() {
-    setFinIndex(0);
-    setPhase("fin");
-  }
+  function passToFin() { setFinIndex(0); setPhase("fin"); }
 
-  // ═══════════════════════════════════════════════════════
-  // BLOC 3
-  // ═══════════════════════════════════════════════════════
   const activeFin = STEPS_FIN.filter(s => {
     if (s.skipIf && s.skipIf({ ...finAnswers, ...extractedData })) return false;
     return true;
@@ -614,18 +448,12 @@ Description : ${firstUserMsg}` }]);
     const newAnswers = { ...finAnswers, [currentFinStep.id]: option };
     setFinAnswers(newAnswers);
     setMultiSelected([]);
-
-    // Si RGPD = Oui → ouvrir le formulaire de contact avant de continuer
     if (currentFinStep.id === "rgpd_consent" && option.startsWith("Oui")) {
       setPendingFinAnswers(newAnswers);
       setShowContactForm(true);
       return;
     }
-
-    if (currentFinStep.last) {
-      launchAnalysis(newAnswers);
-      return;
-    }
+    if (currentFinStep.last) { launchAnalysis(newAnswers); return; }
     let next = finIndex + 1;
     while (next < activeFin.length) {
       if (activeFin[next].skipIf?.({ ...newAnswers, ...extractedData })) { next++; continue; }
@@ -648,11 +476,9 @@ Description : ${firstUserMsg}` }]);
 
   function submitContactForm() {
     if (!validateContact()) return;
-    // Fusionner les coordonnées dans les réponses
     const newAnswers = { ...pendingFinAnswers, ...contactInfo };
     setFinAnswers(newAnswers);
     setShowContactForm(false);
-    // Continuer le questionnaire après rgpd_consent
     const rgpdIdx = activeFin.findIndex(s => s.id === "rgpd_consent");
     let next = rgpdIdx + 1;
     while (next < activeFin.length) {
@@ -663,9 +489,7 @@ Description : ${firstUserMsg}` }]);
     else setFinIndex(next);
   }
 
-  // ═══════════════════════════════════════════════════════
-  // ANALYSE + SAUVEGARDE SUPABASE
-  // ═══════════════════════════════════════════════════════
+  // ── ANALYSE + SAUVEGARDE ──────────────────────────────────────
   async function launchAnalysis(finalFinAnswers) {
     setPhase("results");
     setIsLoading(true);
@@ -677,46 +501,64 @@ Description : ${firstUserMsg}` }]);
       const clean = reply.replace(/```json|```/g, "").trim();
       const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
       let parsed = null;
+
       if (s >= 0 && e > s) {
-        parsed = JSON.parse(clean.slice(s, e + 1));
+        try {
+          parsed = JSON.parse(clean.slice(s, e + 1));
+        } catch (parseErr) {
+          console.error("JSON parse error:", parseErr);
+          parsed = { resume: reply, scores: { compatibilite: 50, similarite: 50, faisabilite: 50, global: 50 } };
+        }
       } else {
         parsed = { resume: reply, scores: { compatibilite: 50, similarite: 50, faisabilite: 50, global: 50 } };
       }
 
-      // ── SAUVEGARDE SUPABASE (si consentement RGPD donné) ──
+      // ── FIX : Recalcul déterministe des scores ──────────────
+      if (parsed?.action_groupe?.message && parsed?.scores) {
+        const msg = (parsed.action_groupe.message + " " + (parsed.resume || "")).toLowerCase();
+        // Score compatibilité basé sur ce qui est trouvé
+        if (msg.includes("en cours") || msg.includes("active") || msg.includes("lancée") || msg.includes("toujours en cours")) {
+          parsed.scores.compatibilite = 82;
+        } else if (msg.includes("envisage") || msg.includes("potentiel") || msg.includes("précédent") || msg.includes("canada") || msg.includes("étranger")) {
+          parsed.scores.compatibilite = 55;
+        } else if (msg.includes("aucune") || msg.includes("pas identifiée") || msg.includes("non identifiée") || msg.includes("pas trouvé")) {
+          parsed.scores.compatibilite = 30;
+        }
+        // Score faisabilité basé sur prescription
+        if (parsed.prescription?.statut === "favorable") {
+          parsed.scores.faisabilite = Math.max(parsed.scores.faisabilite || 0, 65);
+        } else if (parsed.prescription?.statut === "urgent") {
+          parsed.scores.faisabilite = Math.min(parsed.scores.faisabilite || 100, 40);
+        }
+        // Score similarité : booste si beaucoup de témoignages mentionnés
+        if (msg.includes("milliers") || msg.includes("nombreux") || msg.includes("beaucoup")) {
+          parsed.scores.similarite = Math.max(parsed.scores.similarite || 0, 70);
+        }
+        // Recalcul global
+        parsed.scores.global = Math.round(
+          (parsed.scores.compatibilite + parsed.scores.similarite + parsed.scores.faisabilite) / 3
+        );
+      }
+
+      // ── SAUVEGARDE SUPABASE ──────────────────────────────────
       if (finalFinAnswers.rgpd_consent === "Oui, j'accepte la sauvegarde et les alertes") {
         try {
           const saveRes = await fetch("/api/save-dossier", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              dossier: {
-                ...debutAnswers,
-                ...extractedData,
-                ...finalFinAnswers,
-                conversation_resume: conversation
-                  .filter(m => m.role === "user")
-                  .map(m => m.content)
-                  .join(" | "),
-              },
+              dossier: { ...debutAnswers, ...extractedData, ...finalFinAnswers,
+                conversation_resume: conversation.filter(m => m.role === "user").map(m => m.content).join(" | ") },
               analyse: parsed,
             }),
           });
           const saveData = await saveRes.json();
-
-          // Si clustering détecté → enrichir le message action de groupe
           if (saveData.clustering_alerte && parsed.action_groupe) {
-            parsed.action_groupe = {
-              ...parsed.action_groupe,
-              potentiel: "élevé",
+            parsed.action_groupe = { ...parsed.action_groupe, potentiel: "élevé",
               message: (parsed.action_groupe.message || "") +
-                " D'autres consommateurs ont déjà signalé le même problème dans notre base — une action collective est possible.",
-            };
+                " D'autres consommateurs ont déjà signalé le même problème dans notre base — une action collective est possible." };
           }
-        } catch (saveErr) {
-          // Ne pas bloquer l'affichage des résultats si la sauvegarde échoue
-          console.error("[save-dossier]", saveErr);
-        }
+        } catch (saveErr) { console.error("[save-dossier]", saveErr); }
       }
 
       setAnalyse(parsed);
@@ -726,16 +568,10 @@ Description : ${firstUserMsg}` }]);
     setIsLoading(false);
   }
 
-  // ── REMPLACE la fonction buildPrompt dans index.jsx ──────────────
-// Cherche "function buildPrompt(a) {" et remplace TOUTE la fonction par ceci :
-
-function buildPrompt(a) {
-  const lignes = Object.entries(a)
-    .filter(([k, v]) => v)
-    .map(([k, v]) => `- ${k.replace(/_/g, " ")} : ${v}`)
-    .join("\n");
-
-  return `Tu es AVOCACTION, agent IA spécialisé en droit de la consommation français (loi n° 2025-391 du 30 avril 2025).
+  function buildPrompt(a) {
+    const lignes = Object.entries(a).filter(([k, v]) => v)
+      .map(([k, v]) => `- ${k.replace(/_/g, " ")} : ${v}`).join("\n");
+    return `Tu es AVOCACTION, agent IA spécialisé en droit de la consommation français (loi n° 2025-391 du 30 avril 2025).
 
 Points de droit clés :
 - Prescription produit : 2 ans Art. L217-4 C. conso
@@ -746,48 +582,35 @@ Points de droit clés :
 Données collectées :
 ${lignes}
 
-═══════════════════════════════════════════════════════
-ÉTAPE 1 OBLIGATOIRE — RECHERCHE WEB AVANT TOUT SCORING
-Tu DOIS utiliser web_search AVANT de calculer les scores.
-Lance ces recherches :
-1. "${a.entreprise || "l'entreprise"} action de groupe France"
-2. "${a.entreprise || "l'entreprise"} recours collectif consommateurs"
-3. Si pertinent : "${a.type_produit || a.probleme || ""} action groupe France 2024 2025"
-
-Les scores doivent refléter ce que tu trouves RÉELLEMENT.
-Si tu ne trouves rien → compatibilite et similarite faibles (< 40).
-Si tu trouves une action en cours → compatibilite élevée (> 70).
-═══════════════════════════════════════════════════════
-
-ÉTAPE 2 — Retourne UNIQUEMENT ce JSON valide (après tes recherches) :
+Retourne UNIQUEMENT ce JSON valide, sans aucun texte avant ou après, commence par { et termine par } :
 {
   "entreprise": "nom identifié",
-  "resume": "2-3 phrases résumant la situation de façon claire et personnalisée, en mentionnant ce que tu as trouvé sur le web",
+  "resume": "2-3 phrases résumant la situation et ce que tu as trouvé sur le web",
   "prescription": {
-    "statut": "favorable | attention | urgent",
-    "message": "explication précise des délais applicables selon le type de problème",
-    "expiration": "date ou période d'expiration"
+    "statut": "favorable",
+    "message": "explication précise des délais",
+    "expiration": "date ou période"
   },
   "rappel": {
-    "existe": true/false,
-    "message": "détail sur le rappel ou l'alerte — basé sur tes recherches"
+    "existe": false,
+    "message": "détail sur le rappel ou absence"
   },
   "action_groupe": {
-    "potentiel": "élevé | moyen | faible",
-    "message": "cite les actions RÉELLES que tu as trouvées, ou explique pourquoi aucune n'existe encore"
+    "potentiel": "élevé",
+    "message": "actions réelles trouvées ou absence"
   },
   "scores": {
-    "compatibilite": <0-100 — basé sur actions trouvées sur le web>,
-    "similarite": <0-100 — basé sur témoignages/cas similaires trouvés>,
-    "faisabilite": <0-100 — basé sur critères légaux + preuves disponibles>,
-    "global": <moyenne arrondie des 3 scores>
+    "compatibilite": 60,
+    "similarite": 60,
+    "faisabilite": 70,
+    "global": 63
   },
-  "recommandation": "conseil personnalisé et actionnable en 2-3 phrases",
-  "etapes": ["action prioritaire 1", "action prioritaire 2", "action prioritaire 3"],
-  "urgence": "haute | normale | faible",
-  "source_recherche": "résumé en 1 phrase de ce que tu as trouvé ou non sur le web"
+  "recommandation": "conseil personnalisé 2-3 phrases",
+  "etapes": ["étape 1", "étape 2", "étape 3"],
+  "urgence": "normale"
 }`;
-}
+  }
+
   function reset() {
     setStarted(false); setPhase("debut"); setDebutIndex(0); setDebutAnswers({});
     setClarif(null); setClarifInput(""); setConversation([]); setUserInput("");
@@ -796,9 +619,6 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
     setIsLoading(false); setAnalyse(null);
   }
 
-  // ═══════════════════════════════════════════════════════
-  // RENDU — Landing
-  // ═══════════════════════════════════════════════════════
   if (!started) {
     return (
       <div style={S.landingPage}>
@@ -819,7 +639,7 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
         </div>
         <div style={S.landingFeatures}>
           {[
-            { icon: "🔍", titre: "Registre officiel", desc: "Consultation automatique du registre des actions de groupe 2025 du Ministère de la Justice" },
+            { icon: "🔍", titre: "Recherche web réelle", desc: "Recherche automatique des actions de groupe existantes en France" },
             { icon: "⏱️", titre: "Surveillance prescription", desc: "Vérification des délais légaux (2 ans produit, 5 ans faits) avec alertes automatiques" },
             { icon: "🧠", titre: "Agent IA conversationnel", desc: "Analyse votre description et ne pose que les questions vraiment nécessaires" },
             { icon: "🔔", titre: "Clustering clients", desc: "Détection de cas similaires — vous pouvez rejoindre une action existante" },
@@ -859,21 +679,12 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
     );
   }
 
-  // ═══════════════════════════════════════════════════════
-  // RENDU — Résultats
-  // ═══════════════════════════════════════════════════════
   if (phase === "results") {
     const sc = (v) => v >= 75 ? "#2D7D4E" : v >= 50 ? "#C9A84C" : "#C0392B";
     const sl = (v) => v >= 75 ? "Élevé" : v >= 50 ? "Moyen" : "Faible";
     const urgC = { haute: "#C0392B", normale: "#C9A84C", faible: "#2D7D4E" };
     const potC = { "élevé": "#2D7D4E", moyen: "#C9A84C", faible: "#C0392B" };
     const preC = { favorable: "#2D7D4E", attention: "#C9A84C", urgent: "#C0392B" };
-
-    if (analyse?.scores) {
-      const { compatibilite: c, similarite: s2, faisabilite: f } = analyse.scores;
-      if ((c > 0 || s2 > 0 || f > 0) && Math.abs(analyse.scores.global - Math.round((c+s2+f)/3)) > 20)
-        analyse.scores.global = Math.round((c + s2 + f) / 3);
-    }
 
     return (
       <div style={S.resultsPage}>
@@ -1011,9 +822,6 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
     );
   }
 
-  // ═══════════════════════════════════════════════════════
-  // RENDU — Questionnaire
-  // ═══════════════════════════════════════════════════════
   const totalSteps = STEPS_DEBUT.length + 1 + activeFin.length;
   const currentGlobal = phase === "debut" ? debutIndex : phase === "conversation" ? STEPS_DEBUT.length : STEPS_DEBUT.length + 1 + finIndex;
   const progress = Math.round((currentGlobal / totalSteps) * 100);
@@ -1083,9 +891,7 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
                 {m.role === "assistant" && m.options && m.options.length > 0 && i === conversation.length - 1 && !conversationDone && !m.multiSelect && (
                   <div style={S.convOptions}>
                     {m.options.map((opt, j) => (
-                      <button key={j}
-                        onClick={() => sendMessage(opt)}
-                        style={S.convOptionBtn}
+                      <button key={j} onClick={() => sendMessage(opt)} style={S.convOptionBtn}
                         onMouseEnter={e => { e.currentTarget.style.background = "#FFF8E7"; e.currentTarget.style.borderColor = "#C9A84C"; }}
                         onMouseLeave={e => { e.currentTarget.style.background = "#F7F5F0"; e.currentTarget.style.borderColor = "#E5E7EB"; }}>
                         {opt}
@@ -1109,7 +915,6 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
             )}
             <div ref={chatEndRef} />
           </div>
-
           {conversationDone ? (
             <div style={S.convDoneBox}>
               <p style={S.convDoneText}>✓ L'agent a collecté toutes les informations nécessaires.</p>
@@ -1134,18 +939,10 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
         </div>
       )}
 
-      {/* ── FORMULAIRE CONTACT RGPD ── */}
       {showContactForm && (
         <div style={S.questionContainer}>
           <div style={S.stepLabel}>Vos coordonnées</div>
           <p style={S.question}>Pour vous recontacter et activer la veille personnalisée</p>
-          <p style={{ fontSize:12, color:S_GREY, fontFamily:"Calibri, sans-serif", margin:"-8px 0 4px" }}>
-            Vos données sont protégées conformément à notre{" "}
-            <a href="/rgpd" target="_blank" style={{ color:"#C9A84C", textDecoration:"underline" }}>
-              politique de confidentialité (RGPD)
-            </a>
-          </p>
-
           {[
             { id:"prenom", label:"Prénom", type:"text", placeholder:"Votre prénom" },
             { id:"nom", label:"Nom", type:"text", placeholder:"Votre nom de famille" },
@@ -1157,37 +954,16 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
               <label style={{ fontSize:12, fontWeight:"bold", color:"#0A1628", fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1 }}>
                 {field.label} <span style={{ color:"#C0392B" }}>*</span>
               </label>
-              <input
-                type={field.type}
-                value={contactInfo[field.id]}
+              <input type={field.type} value={contactInfo[field.id]}
                 onChange={e => setContactInfo(prev => ({ ...prev, [field.id]: e.target.value }))}
                 placeholder={field.placeholder}
-                style={{
-                  padding:"12px 14px", border: contactErrors[field.id] ? "1.5px solid #C0392B" : "1.5px solid #E5E7EB",
-                  borderRadius:10, fontSize:14, fontFamily:"Calibri, sans-serif", outline:"none",
-                  background:"#FFFFFF", color:"#0A1628"
-                }}
-              />
-              {contactErrors[field.id] && (
-                <span style={{ fontSize:11, color:"#C0392B", fontFamily:"Calibri, sans-serif" }}>{contactErrors[field.id]}</span>
-              )}
+                style={{ padding:"12px 14px", border: contactErrors[field.id] ? "1.5px solid #C0392B" : "1.5px solid #E5E7EB",
+                  borderRadius:10, fontSize:14, fontFamily:"Calibri, sans-serif", outline:"none", background:"#FFFFFF", color:"#0A1628" }} />
+              {contactErrors[field.id] && <span style={{ fontSize:11, color:"#C0392B", fontFamily:"Calibri, sans-serif" }}>{contactErrors[field.id]}</span>}
             </div>
           ))}
-
-          <div style={{ fontSize:11, color:"#6B7280", fontFamily:"Calibri, sans-serif", lineHeight:1.6, background:"#F7F5F0", padding:"10px 14px", borderRadius:8, border:"1px solid #E5E7EB" }}>
-            En soumettant ce formulaire, vous consentez à ce que vos données personnelles soient utilisées
-            pour l'analyse juridique, la veille automatique et les alertes de prescription.
-            Vous pouvez retirer votre consentement à tout moment. Voir notre{" "}
-            <a href="/rgpd" target="_blank" style={{ color:"#C9A84C" }}>politique de confidentialité</a>.
-          </div>
-
-          <button onClick={submitContactForm} style={S.submitBtn}>
-            Valider et continuer vers l'analyse →
-          </button>
-          <button onClick={() => { setShowContactForm(false); setContactErrors({}); }}
-            style={S.backBtn}>
-            ← Annuler (analyse sans sauvegarde)
-          </button>
+          <button onClick={submitContactForm} style={S.submitBtn}>Valider et continuer vers l'analyse →</button>
+          <button onClick={() => { setShowContactForm(false); setContactErrors({}); }} style={S.backBtn}>← Annuler</button>
         </div>
       )}
 
@@ -1238,9 +1014,6 @@ Si tu trouves une action en cours → compatibilite élevée (> 70).
   );
 }
 
-// ═══════════════════════════════════════════════════════════
-// STYLES
-// ═══════════════════════════════════════════════════════════
 const S_GREY = "#6B7280";
 const S = {
   logo: { fontSize:22, fontWeight:"bold", letterSpacing:1, color:"#FFFFFF" },
