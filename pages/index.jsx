@@ -237,13 +237,16 @@ export default function Home() {
   }, [conversation, agentLoading]);
 
   // ── API helper ───────────────────────────────────────────
-  function extractText(data) {
-    if (Array.isArray(data.content)) {
-      const block = data.content.find(b => b.type === "text" || b.text);
-      if (block?.text) return block.text;
-    }
-    return data.reply || data.message || data.text || JSON.stringify(data);
+ function extractText(data) {
+  // Priorité au champ reply (déjà le dernier bloc texte depuis chat.js)
+  if (data.reply) return data.reply;
+  if (Array.isArray(data.content)) {
+    // Prendre le DERNIER bloc texte (après les recherches web)
+    const textBlocks = data.content.filter(b => b.type === "text" && b.text);
+    if (textBlocks.length > 0) return textBlocks[textBlocks.length - 1].text;
   }
+  return data.message || data.text || JSON.stringify(data);
+}
 
   async function callAPI(messages, system) {
     const body = system ? { messages, system } : { messages };
