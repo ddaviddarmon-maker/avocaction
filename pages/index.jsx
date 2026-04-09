@@ -102,6 +102,30 @@ const STEPS_FIN = [
   },
 ];
 
+function Footer() {
+  return (
+    <div style={{ background:"#0A1628", borderTop:"1px solid #1E3050", padding:"16px 40px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+      <span style={{ fontSize:11, color:"#3D4F63", fontFamily:"Calibri, sans-serif" }}>
+        © 2025 Avocaction — Outil d'information juridique, pas de conseil juridique
+      </span>
+      <div style={{ display:"flex", gap:20 }}>
+        {[
+          { label:"Mentions légales", href:"/mentions-legales" },
+          { label:"CGU", href:"/cgu" },
+          { label:"Confidentialité", href:"/rgpd" },
+          { label:"Contact", href:"mailto:d.darmon@eleve-efb.fr" },
+        ].map(l => (
+          <a key={l.href} href={l.href} style={{ fontSize:11, color:"#5B6B7C", fontFamily:"Calibri, sans-serif", textDecoration:"none" }}
+            onMouseEnter={e => e.currentTarget.style.color="#C9A84C"}
+            onMouseLeave={e => e.currentTarget.style.color="#5B6B7C"}>
+            {l.label}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ConvDateInput({ placeholder, onSubmit }) {
   const [val, setVal] = useState("");
   return (
@@ -676,6 +700,7 @@ Retourne UNIQUEMENT ce JSON valide, sans aucun texte avant ou après, commence p
           <p style={S.landingLegal}>Loi n° 2025-391 · Art. L217-4 C. conso · Art. 2224 C. civil</p>
         </div>
       </div>
+      <Footer />
     );
   }
 
@@ -819,6 +844,7 @@ Retourne UNIQUEMENT ce JSON valide, sans aucun texte avant ou après, commence p
           <div style={{ padding:40, color:"#8B9AB0", textAlign:"center" }}>Chargement…</div>
         )}
       </div>
+      <Footer />
     );
   }
 
@@ -1011,6 +1037,7 @@ Retourne UNIQUEMENT ce JSON valide, sans aucun texte avant ou après, commence p
         </div>
       )}
     </div>
+    <Footer />
   );
 }
 
