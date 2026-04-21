@@ -574,7 +574,6 @@ function PageAnalyse({ resetKey }) {
     const hasDate = /20(2[0-9])/.test(d) || /\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b/.test(d) || /il y a \d|depuis \d+ (an|mois)|l.an dernier|hier/.test(d);
     if (!asked.includes("date")&&!hasDate) return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date", placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     if (!asked.includes("corpo")&&(d.includes("malade")||d.includes("symptôme")||d.includes("nausée")||d.includes("vomis")||d.includes("blessé")||d.includes("allergi")||d.includes("hospitali")||d.includes("bébé")||d.includes("enfant"))) return { id:"corpo", content:"Quel type de préjudice corporel ?", multiSelect:true, options:["Nausées / vomissements","Réaction allergique","Hospitalisation","Blessure","Séquelles durables","Aucun symptôme"] };
-    if (!asked.includes("preuve")) return { id:"preuve", content:"Disposez-vous d'une preuve d'achat ?", multiSelect:true, options:["Ticket de caisse","Facture","Relevé bancaire","Photo de l'emballage","Aucune preuve"] };
     return null;
   }
 
