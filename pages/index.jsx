@@ -765,7 +765,11 @@ Retourne UNIQUEMENT ce JSON valide, commence par { et termine par } :
   "resume": "2-3 phrases résumant la situation et ce que tu as trouvé sur le web",
   "prescription": { "statut": "favorable", "message": "explication précise des délais", "expiration": "date ou période" },
   "rappel": { "existe": false, "message": "détail sur le rappel ou absence" },
-  "action_groupe": { "potentiel": "élevé", "message": "actions réelles trouvées ou absence" },
+  "action_groupe": {
+    "potentiel": "élevé",
+    "message": "1 phrase résumant la situation globale",
+    "actions_trouvees": ["Nom action 1 — association — statut", "Nom action 2 — association — statut"]
+  },
   "scores": { "compatibilite": 60, "similarite": 60, "faisabilite": 70, "global": 63 },
   "recommandation": "conseil personnalisé 2-3 phrases",
   "etapes": ["étape 1", "étape 2", "étape 3"],
@@ -907,14 +911,27 @@ Retourne UNIQUEMENT ce JSON valide, commence par { et termine par } :
               )}
               {analyse.action_groupe&&(
                 <div style={{ ...SR2.card, flex:1, minWidth:220, borderTop:`4px solid ${potC[analyse.action_groupe.potentiel]||C.amber}` }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:10 }}>
                     <span style={{ fontSize:20 }}>⚖️</span>
                     <span style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Action de groupe</span>
                     <span style={{ fontSize:12, padding:"2px 10px", borderRadius:20, background:(potC[analyse.action_groupe.potentiel]||C.amber)+"22", color:potC[analyse.action_groupe.potentiel]||C.amber, border:`1px solid ${potC[analyse.action_groupe.potentiel]||C.amber}`, fontFamily:"Calibri, sans-serif", fontWeight:"bold" }}>
                       Potentiel {analyse.action_groupe.potentiel}
                     </span>
                   </div>
-                  <p style={{ fontSize:13, color:"#6B7280", lineHeight:1.6, fontFamily:"Calibri, sans-serif", margin:0 }}>{analyse.action_groupe.message}</p>
+                  <p style={{ fontSize:13, color:"#6B7280", lineHeight:1.6, fontFamily:"Calibri, sans-serif", margin:"0 0 10px" }}>{analyse.action_groupe.message}</p>
+                  {analyse.action_groupe.actions_trouvees?.length > 0 && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      <div style={{ fontSize:11, color:C.grayMid, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1 }}>
+                        Actions identifiées
+                      </div>
+                      {analyse.action_groupe.actions_trouvees.map((action, i) => (
+                        <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 14px", background:"#FEF2F2", border:"1px solid #FECACA", borderLeft:"4px solid #F87171", borderRadius:8 }}>
+                          <span style={{ color:"#F87171", fontSize:16, flexShrink:0, lineHeight:1.4 }}>⚠</span>
+                          <span style={{ fontSize:13, color:"#991B1B", fontFamily:"Calibri, sans-serif", lineHeight:1.5 }}>{action}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
