@@ -490,8 +490,9 @@ function PageAnalyse({ resetKey }) {
   const [multiSelected, setMultiSelected]   = useState([]);
   const [isLoading, setIsLoading]           = useState(false);
   const [analyse, setAnalyse]               = useState(null);
-  // Création de compte après scoring
-  const [showAccount, setShowAccount]       = useState(false);
+  // Offres + création de compte
+  const [showPricing, setShowPricing]       = useState(false);
+  const [selectedOffer, setSelectedOffer]   = useState(null);
   const [accountEmail, setAccountEmail]     = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accountError, setAccountError]     = useState("");
@@ -507,7 +508,7 @@ function PageAnalyse({ resetKey }) {
     setClarif(null); setClarifInput(""); setConversation([]); setUserInput("");
     setAgentLoading(false); setConversationDone(false); setExtractedData({});
     setFinIndex(0); setFinAnswers({}); setMultiSelected([]);
-    setIsLoading(false); setAnalyse(null); setShowAccount(false);
+    setIsLoading(false); setAnalyse(null); setShowPricing(false); setSelectedOffer(null);
     setAccountEmail(""); setAccountPassword(""); setAccountError(""); setAccountDone(false); setSavedAnalyse(null);
   }, [resetKey]);
 
@@ -574,6 +575,7 @@ function PageAnalyse({ resetKey }) {
     const hasDate = /20(2[0-9])/.test(d) || /\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b/.test(d) || /il y a \d|depuis \d+ (an|mois)|l.an dernier|hier/.test(d);
     if (!asked.includes("date")&&!hasDate) return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date", placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     if (!asked.includes("corpo")&&(d.includes("malade")||d.includes("symptôme")||d.includes("nausée")||d.includes("vomis")||d.includes("blessé")||d.includes("allergi")||d.includes("hospitali")||d.includes("bébé")||d.includes("enfant"))) return { id:"corpo", content:"Quel type de préjudice corporel ?", multiSelect:true, options:["Nausées / vomissements","Réaction allergique","Hospitalisation","Blessure","Séquelles durables","Aucun symptôme"] };
+    if (!asked.includes("preuve")) return { id:"preuve", content:"Disposez-vous d'une preuve d'achat ?", multiSelect:true, options:["Ticket de caisse","Facture","Relevé bancaire","Photo de l'emballage","Aucune preuve"] };
     return null;
   }
 
@@ -944,66 +946,173 @@ Retourne UNIQUEMENT ce JSON valide, commence par { et termine par } :
               </div>
             )}
 
-            {/* Création de compte */}
+            {/* Offres + Création de compte */}
             {!accountDone ? (
               <div style={{ ...SR2.card, background:C.navyMid, border:`1px solid ${C.blue}` }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-                  <span style={{ fontSize:20 }}>🔔</span>
-                  <span style={{ fontSize:14, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif" }}>Être alerté si une action de groupe est lancée</span>
-                </div>
-                {!showAccount ? (
+
+                {/* Étape 1 : CTA */}
+                {!showPricing && !selectedOffer && (
                   <div>
-                    <p style={{ fontSize:13, color:C.gray, fontFamily:"Calibri, sans-serif", lineHeight:1.6, marginBottom:14 }}>
-                      Créez un compte gratuit pour accéder à votre dossier, recevoir les alertes de prescription et être notifié si une action collective vous concerne.
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+                      <span style={{ fontSize:20 }}>🔔</span>
+                      <span style={{ fontSize:15, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif" }}>Protégez votre dossier — choisissez votre offre</span>
+                    </div>
+                    <p style={{ fontSize:13, color:C.gray, fontFamily:"Calibri, sans-serif", lineHeight:1.6, marginBottom:16 }}>
+                      Sauvegardez votre dossier, recevez des alertes à J-365, J-180 et J-30 avant la prescription, et soyez accompagné dans vos démarches.
                     </p>
-                    <button onClick={()=>setShowAccount(true)}
-                      style={{ padding:"11px 24px", background:C.blue, color:C.navy, border:"none", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:"bold", fontFamily:"Calibri, sans-serif" }}>
-                      Créer mon compte →
-                    </button>
-                    <button onClick={()=>setAccountDone(true)}
-                      style={{ marginLeft:12, padding:"11px 16px", background:"transparent", border:`1px solid ${C.navyMid}`, color:C.gray, borderRadius:10, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif" }}>
-                      Non merci
-                    </button>
+                    <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                      <button onClick={()=>setShowPricing(true)}
+                        style={{ padding:"12px 28px", background:C.blue, color:C.navy, border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:"bold", fontFamily:"Palatino Linotype, serif", boxShadow:`0 4px 16px rgba(77,184,232,0.3)` }}>
+                        Voir les offres →
+                      </button>
+                      <button onClick={()=>setAccountDone(true)}
+                        style={{ padding:"12px 16px", background:"transparent", border:`1px solid ${C.navyMid}`, color:C.gray, borderRadius:10, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif" }}>
+                        Non merci
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <div style={{ display:"flex", flexDirection:"column", gap:12, maxWidth:400 }}>
-                    {[
-                      { label:"Email", type:"email", val:accountEmail, set:setAccountEmail, placeholder:"votre@email.com" },
-                      { label:"Mot de passe", type:"password", val:accountPassword, set:setAccountPassword, placeholder:"Choisissez un mot de passe" },
-                    ].map(f=>(
-                      <div key={f.label}>
-                        <label style={{ fontSize:11, fontWeight:"bold", color:C.gray, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1, display:"block", marginBottom:5 }}>{f.label}</label>
-                        <input type={f.type} value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder}
-                          style={{ width:"100%", padding:"10px 14px", background:"rgba(255,255,255,0.07)", border:`1px solid ${C.navyMid}`, borderRadius:9, fontSize:13, fontFamily:"Calibri, sans-serif", outline:"none", color:C.cream, boxSizing:"border-box" }}/>
+                )}
+
+                {/* Étape 2 : Tableau comparatif */}
+                {showPricing && !selectedOffer && (() => {
+                  const OFFRES = [
+                    { nom:"Découverte", prix:"Gratuit",  highlight:false },
+                    { nom:"Suivi",      prix:"6€/mois",  highlight:false },
+                    { nom:"Action",     prix:"15€",       highlight:false },
+                    { nom:"Premium",    prix:"99€",       highlight:true  },
+                  ];
+                  const FEATURES = [
+                    { label:"Analyse + scoring",                    v:[true, true, true, true]  },
+                    { label:"Résultats détaillés",                  v:[true, true, true, true]  },
+                    { label:"Accès dossier en ligne",               v:[false,true, true, true]  },
+                    { label:"Alertes J-365 / J-180 / J-30",         v:[false,true, true, true]  },
+                    { label:"Veille automatique",                   v:[false,true, true, true]  },
+                    { label:"Soumission action de groupe",          v:[false,false,true, true]  },
+                    { label:"Rapport PDF détaillé",                 v:[false,false,false,true]  },
+                    { label:"Accompagnement personnalisé",          v:[false,false,false,true]  },
+                    { label:"Suivi jusqu'à l'action",               v:[false,false,false,true]  },
+                  ];
+                  return (
+                    <div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+                        <span style={{ fontSize:20 }}>⚖️</span>
+                        <span style={{ fontSize:15, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif" }}>Choisissez votre offre</span>
                       </div>
-                    ))}
-                    {accountError&&<p style={{ fontSize:12, color:C.red, fontFamily:"Calibri, sans-serif", margin:0 }}>{accountError}</p>}
-                    <p style={{ fontSize:11, color:C.grayMid, fontFamily:"Calibri, sans-serif", lineHeight:1.5, margin:0 }}>
-                      En créant un compte, vous acceptez la sauvegarde de vos données conformément à notre <a href="/rgpd" style={{ color:C.blue }}>politique de confidentialité</a>.
+                      <div style={{ overflowX:"auto" }}>
+                        <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"Calibri, sans-serif" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ padding:"10px 12px", textAlign:"left", fontSize:12, color:C.gray, fontWeight:"normal", borderBottom:`1px solid rgba(255,255,255,0.08)`, minWidth:190 }} />
+                              {OFFRES.map(o => (
+                                <th key={o.nom} style={{ padding:"8px 10px", textAlign:"center", borderBottom:`1px solid rgba(255,255,255,0.08)`, minWidth:105 }}>
+                                  <div style={{ display:"inline-block", padding:"8px 12px", borderRadius:10, background:o.highlight?C.blue:"rgba(255,255,255,0.06)", border:`1px solid ${o.highlight?C.blue:"rgba(255,255,255,0.1)"}` }}>
+                                    {o.highlight && <div style={{ fontSize:9, color:C.navy, textTransform:"uppercase", letterSpacing:1, marginBottom:3, fontWeight:"bold" }}>⭐ Recommandé</div>}
+                                    <div style={{ fontSize:14, fontWeight:"bold", color:o.highlight?C.navy:C.blue, fontFamily:"Palatino Linotype, serif" }}>{o.nom}</div>
+                                    <div style={{ fontSize:12, color:o.highlight?C.navy:C.gray, marginTop:2 }}>{o.prix}</div>
+                                  </div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {FEATURES.map((row, ri) => (
+                              <tr key={ri} style={{ background:ri%2===0?"rgba(255,255,255,0.03)":"transparent" }}>
+                                <td style={{ padding:"9px 12px", fontSize:12, color:C.gray, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>{row.label}</td>
+                                {row.v.map((val, vi) => (
+                                  <td key={vi} style={{ padding:"9px 12px", textAlign:"center", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:15 }}>
+                                    {val
+                                      ? <span style={{ color:"#00D4AA", fontWeight:"bold" }}>✓</span>
+                                      : <span style={{ color:"#F87171" }}>✗</span>
+                                    }
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                            <tr>
+                              <td style={{ padding:"14px 12px" }}/>
+                              {OFFRES.map(o => (
+                                <td key={o.nom} style={{ padding:"14px 10px", textAlign:"center" }}>
+                                  <button onClick={()=>setSelectedOffer(o)}
+                                    style={{ padding:"9px 0", width:"100%", background:o.highlight?C.blue:"transparent",
+                                      color:o.highlight?C.navy:C.blue, border:`1.5px solid ${C.blue}`,
+                                      borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:"bold",
+                                      fontFamily:"Calibri, sans-serif", transition:"all 0.15s" }}
+                                    onMouseEnter={e=>{e.currentTarget.style.background=C.blue;e.currentTarget.style.color=C.navy;}}
+                                    onMouseLeave={e=>{if(!o.highlight){e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.blue;}}}>
+                                    Choisir
+                                  </button>
+                                </td>
+                              ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <button onClick={()=>setShowPricing(false)}
+                        style={{ marginTop:12, background:"transparent", border:"none", color:C.grayMid, cursor:"pointer", fontSize:12, fontFamily:"Calibri, sans-serif" }}>
+                        ← Retour
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Étape 3 : Formulaire compte */}
+                {selectedOffer && (
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:20 }}>👤</span>
+                      <span style={{ fontSize:15, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif" }}>
+                        Créer mon compte
+                      </span>
+                      <span style={{ fontSize:12, padding:"3px 10px", borderRadius:20, background:`${C.blue}22`, color:C.blue, border:`1px solid ${C.blue}`, fontFamily:"Calibri, sans-serif", fontWeight:"bold" }}>
+                        {selectedOffer.nom} — {selectedOffer.prix}
+                      </span>
+                    </div>
+                    <p style={{ fontSize:12, color:C.grayMid, fontFamily:"Calibri, sans-serif", marginBottom:16 }}>
+                      {selectedOffer.nom==="Découverte" ? "Accès gratuit — sauvegardez votre analyse."
+                        : selectedOffer.nom==="Suivi"      ? "Veille automatique + alertes J-365, J-180, J-30 incluses."
+                        : selectedOffer.nom==="Action"     ? "Soumission de votre dossier à une action de groupe."
+                        : "Accompagnement complet : rapport PDF + suivi jusqu'à l'action de groupe."}
                     </p>
-                    <div style={{ display:"flex", gap:10 }}>
-                      <button onClick={createAccount}
-                        style={{ flex:1, padding:"11px 0", background:C.blue, color:C.navy, border:"none", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:"bold", fontFamily:"Calibri, sans-serif" }}>
-                        Créer mon compte →
-                      </button>
-                      <button onClick={()=>setShowAccount(false)}
-                        style={{ padding:"11px 14px", background:"transparent", border:`1px solid ${C.navyMid}`, color:C.gray, borderRadius:10, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif" }}>
-                        ←
-                      </button>
+                    <div style={{ display:"flex", flexDirection:"column", gap:12, maxWidth:400 }}>
+                      {[
+                        { label:"Email",        type:"email",    val:accountEmail,    set:setAccountEmail,    placeholder:"votre@email.com" },
+                        { label:"Mot de passe", type:"password", val:accountPassword, set:setAccountPassword, placeholder:"Choisissez un mot de passe" },
+                      ].map(f=>(
+                        <div key={f.label}>
+                          <label style={{ fontSize:11, fontWeight:"bold", color:C.gray, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1, display:"block", marginBottom:5 }}>{f.label}</label>
+                          <input type={f.type} value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder}
+                            style={{ width:"100%", padding:"10px 14px", background:"rgba(255,255,255,0.07)", border:`1px solid ${C.navyMid}`, borderRadius:9, fontSize:13, fontFamily:"Calibri, sans-serif", outline:"none", color:C.cream, boxSizing:"border-box" }}/>
+                        </div>
+                      ))}
+                      {accountError&&<p style={{ fontSize:12, color:C.red, fontFamily:"Calibri, sans-serif", margin:0 }}>{accountError}</p>}
+                      <p style={{ fontSize:11, color:C.grayMid, fontFamily:"Calibri, sans-serif", lineHeight:1.5, margin:0 }}>
+                        En créant un compte, vous acceptez notre <a href="/rgpd" style={{ color:C.blue }}>politique de confidentialité</a>.
+                        {selectedOffer.nom!=="Découverte" && " Le paiement sera activé à l'ouverture commerciale."}
+                      </p>
+                      <div style={{ display:"flex", gap:10 }}>
+                        <button onClick={createAccount}
+                          style={{ flex:1, padding:"12px 0", background:C.blue, color:C.navy, border:"none", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:"bold", fontFamily:"Palatino Linotype, serif" }}>
+                          Créer mon compte →
+                        </button>
+                        <button onClick={()=>setSelectedOffer(null)}
+                          style={{ padding:"12px 14px", background:"transparent", border:`1px solid ${C.navyMid}`, color:C.gray, borderRadius:10, cursor:"pointer", fontSize:13, fontFamily:"Calibri, sans-serif" }}>
+                          ←
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div style={{ ...SR2.card, background:"#EAF3DE", border:"1px solid #3B6D11" }}>
-                <p style={{ fontSize:14, color:"#1F4A0A", fontFamily:"Calibri, sans-serif", margin:0 }}>
-                  ✓ Compte créé ! Vous recevrez les alertes et pourrez accéder à votre dossier depuis l'onglet "Suivre mon dossier".
+              <div style={{ ...SR2.card, background:"#0D3320", border:"1px solid #3B6D11" }}>
+                <p style={{ fontSize:14, color:"#4ADE80", fontFamily:"Calibri, sans-serif", margin:0 }}>
+                  ✓ Compte créé ! Offre <strong>{selectedOffer?.nom}</strong> enregistrée. Accédez à votre dossier depuis l'onglet "Suivre mon dossier".
                 </p>
               </div>
             )}
 
             <div style={{ textAlign:"center", marginTop:8 }}>
-              <button onClick={()=>{ setStarted(false); setPhase("debut"); setDebutIndex(0); setDebutAnswers({}); setConversation([]); setConversationDone(false); setExtractedData({}); setFinIndex(0); setFinAnswers({}); setAnalyse(null); setShowAccount(false); setAccountDone(false); setSavedAnalyse(null); }}
+              <button onClick={()=>{ setStarted(false); setPhase("debut"); setDebutIndex(0); setDebutAnswers({}); setConversation([]); setConversationDone(false); setExtractedData({}); setFinIndex(0); setFinAnswers({}); setAnalyse(null); setShowPricing(false); setSelectedOffer(null); setAccountDone(false); setSavedAnalyse(null); }}
                 style={{ background:"transparent", border:`1px solid ${C.navyMid}`, borderRadius:10, padding:"10px 22px", color:C.gray, fontSize:13, cursor:"pointer", fontFamily:"Calibri, sans-serif" }}>
                 ↺ Nouvelle analyse
               </button>
