@@ -153,11 +153,12 @@ const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const SB_URL  = "https://jmeglcfciemlkfupzzws.supabase.co";
 
 function PageDossier() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [dossier, setDossier] = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [dossier, setDossier]   = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   async function login() {
     if (!email.trim() || !password.trim()) { setError("Veuillez remplir tous les champs."); return; }
@@ -174,95 +175,323 @@ function PageDossier() {
     setLoading(false);
   }
 
-  if (dossier) {
-    const a = dossier.analyse_json || {};
-    const sc = (v) => v >= 75 ? C.green : v >= 50 ? C.amber : C.red;
+  async function generatePDF() {
+    if (!dossier) return;
+    setPdfLoading(true);
+    try {
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dossier, analyse: dossier.analyse_json }),
+      });
+      const html = await res.text();
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch { alert("Erreur lors de la génération du PDF."); }
+    setPdfLoading(false);
+  }
+
+  // Assigner un avocat référent selon le type de dossier
+  function getAvocatReferent(d) {
+    const p = (d.type_produit || d.probleme || "").toLowerCase();
+    if (p.includes("rgpd") || p.includes("données") || p.includes("numérique")) return { nom:"Alice", role:"Droit numérique & RGPD", email:"alice@avocaction.fr" };
+    if (p.includes("transport") || p.includes("aérien") || p.includes("vol"))    return { nom:"Fatouma", role:"Droit processuel", email:"fatouma@avocaction.fr" };
+    if (p.includes("santé") || p.includes("médical") || p.includes("pharma"))    return { nom:"Yasmine", role:"Responsabilité civile", email:"yasmine@avocaction.fr" };
+    if (p.includes("abonnement") || p.includes("contrat") || p.includes("service")) return { nom:"Célia", role:"Droit européen", email:"celia@avocaction.fr" };
+    if (p.includes("frais") || p.includes("bancaire") || p.includes("finance"))  return { nom:"Mathieu", role:"Droit de la consommation", email:"mathieu@avocaction.fr" };
+    return { nom:"David Darmon", role:"Fondateur & Droit de la consommation", email:"d.darmon@eleve-efb.fr" };
+  }
+
+  // Calculer les dates d'alerte prescription
+  function getPrescriptionDates(d, a) {
+    const statut = a?.prescription?.statut || "favorable";
+    const expiration = a?.prescription?.expiration || null;
+    // Essai de parsing de la date d'expiration
+    let expiryDate = null;
+    if (expiration) {
+      const match = expiration.match(/(\d{4})/);
+      if (match) expiryDate = new Date(parseInt(match[1]), 11, 31);
+    }
+    if (!expiryDate) {
+      // Fallback : date des faits + 5 ans
+      const dateFaits = d.date_faits;
+      if (dateFaits) {
+        const yearMatch = dateFaits.match(/(\d{4})/);
+        if (yearMatch) expiryDate = new Date(parseInt(yearMatch[1]) + 5, 11, 31);
+      }
+    }
+    if (!expiryDate) return null;
+    const now = new Date();
+    const jours = Math.round((expiryDate - now) / (1000*60*60*24));
+    return {
+      expiry: expiryDate.toLocaleDateString("fr-FR", { month:"long", year:"numeric" }),
+      joursRestants: jours,
+      alerte365: new Date(expiryDate.getTime() - 365*24*60*60*1000).toLocaleDateString("fr-FR", { month:"short", year:"numeric" }),
+      alerte180: new Date(expiryDate.getTime() - 180*24*60*60*1000).toLocaleDateString("fr-FR", { month:"short", year:"numeric" }),
+      alerte30:  new Date(expiryDate.getTime() -  30*24*60*60*1000).toLocaleDateString("fr-FR", { month:"short", year:"numeric" }),
+      urgence: jours < 30 ? "critique" : jours < 180 ? "haute" : jours < 365 ? "modérée" : "faible",
+    };
+  }
+
+  if (!dossier) {
     return (
-      <div style={{ flex:1, background:C.navy, padding:"32px 40px" }}>
-        <div style={{ maxWidth:820, margin:"0 auto", display:"flex", flexDirection:"column", gap:16 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <h2 style={{ color:C.blue, fontFamily:"Palatino Linotype, serif", fontSize:22 }}>Mon dossier</h2>
-            <button onClick={() => setDossier(null)} style={{ background:"transparent", border:`1px solid ${C.navyMid}`, color:C.gray, borderRadius:8, padding:"6px 14px", cursor:"pointer", fontSize:12, fontFamily:"Calibri, sans-serif" }}>← Déconnexion</button>
+      <div style={{ flex:1, background:"#F0F6FA", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
+        <div style={{ background:C.white, border:"1px solid #D0E4F0", borderRadius:16, padding:"44px 40px", width:"100%", maxWidth:420, boxShadow:"0 4px 24px rgba(11,26,62,0.1)" }}>
+          <div style={{ textAlign:"center", marginBottom:32 }}>
+            <Logo size={44} withText={false} />
+            <h2 style={{ fontSize:22, color:C.navy, fontFamily:"Palatino Linotype, serif", marginBottom:8, marginTop:16 }}>Accéder à mon dossier</h2>
+            <p style={{ fontSize:13, color:"#4A6A8A", fontFamily:"Calibri, sans-serif", lineHeight:1.5 }}>Connectez-vous avec vos identifiants</p>
           </div>
-          <div style={SD.card}>
-            <div style={{ fontSize:11, color:"#9CA3AF", fontFamily:"Calibri, sans-serif", marginBottom:8 }}>Dossier créé le {new Date(dossier.created_at).toLocaleDateString("fr-FR")}</div>
-            <div style={{ fontSize:17, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>{a.entreprise || dossier.entreprise}</div>
-            <p style={{ fontSize:14, color:"#374151", lineHeight:1.7, fontFamily:"Calibri, sans-serif", margin:"8px 0 0" }}>{a.resume}</p>
-          </div>
-          {a.scores && (
-            <div style={SD.card}>
-              <div style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif", marginBottom:14 }}>
-                Score de faisabilité — <span style={{ color:sc(a.scores.global) }}>{a.scores.global}/100</span>
-              </div>
-              {[{l:"Compatibilité externe",k:"compatibilite"},{l:"Similarité interne",k:"similarite"},{l:"Faisabilité collective",k:"faisabilite"}].map(({l,k}) => (
-                <div key={k} style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                    <span style={{ fontSize:12, color:"#6B7280", fontFamily:"Calibri, sans-serif" }}>{l}</span>
-                    <span style={{ fontSize:12, fontWeight:"bold", color:sc(a.scores[k]) }}>{a.scores[k]}/100</span>
-                  </div>
-                  <div style={{ height:7, background:"#E5E7EB", borderRadius:4 }}>
-                    <div style={{ height:"100%", width:`${a.scores[k]}%`, background:sc(a.scores[k]), borderRadius:4 }} />
-                  </div>
-                </div>
-              ))}
+          {[
+            { label:"Email", type:"email", val:email, set:setEmail, placeholder:"votre@email.com" },
+            { label:"Mot de passe", type:"password", val:password, set:setPassword, placeholder:"••••••••" },
+          ].map(f => (
+            <div key={f.label} style={{ marginBottom:18 }}>
+              <label style={{ fontSize:11, fontWeight:"bold", color:C.navy, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1, display:"block", marginBottom:7 }}>{f.label}</label>
+              <input type={f.type} value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder}
+                onKeyDown={e=>e.key==="Enter"&&login()}
+                style={{ width:"100%", padding:"12px 14px", border:"1.5px solid #D0E4F0", borderRadius:10, fontSize:14, fontFamily:"Calibri, sans-serif", outline:"none", boxSizing:"border-box", color:C.navy }} />
             </div>
-          )}
-          {a.action_groupe && (
-            <div style={SD.card}>
-              <div style={{ fontSize:13, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif", marginBottom:8 }}>⚖️ Action de groupe — <span style={{ color: a.action_groupe.potentiel==="élevé" ? C.green : C.amber }}>Potentiel {a.action_groupe.potentiel}</span></div>
-              <p style={{ fontSize:13, color:"#6B7280", lineHeight:1.6, fontFamily:"Calibri, sans-serif", margin:0 }}>{a.action_groupe.message}</p>
-            </div>
-          )}
-          {a.recommandation && (
-            <div style={{ ...SD.card, background:C.navy, border:`1px solid ${C.blue}` }}>
-              <div style={{ fontSize:13, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif", marginBottom:8 }}>💡 Recommandation</div>
-              <p style={{ fontSize:14, color:C.cream, lineHeight:1.7, fontFamily:"Calibri, sans-serif", margin:0 }}>{a.recommandation}</p>
-            </div>
-          )}
-          {a.etapes && (
-            <div style={SD.card}>
-              <div style={{ fontSize:13, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif", marginBottom:12 }}>🎯 Prochaines étapes</div>
-              {a.etapes.map((e, i) => (
-                <div key={i} style={{ display:"flex", gap:12, marginBottom:10 }}>
-                  <div style={{ width:26, height:26, borderRadius:"50%", background:C.navy, color:C.blue, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:"bold", flexShrink:0 }}>{i+1}</div>
-                  <p style={{ fontSize:13, color:"#374151", lineHeight:1.6, fontFamily:"Calibri, sans-serif", margin:0, paddingTop:4 }}>{e}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
+          {error && <p style={{ fontSize:12, color:C.red, fontFamily:"Calibri, sans-serif", marginBottom:14 }}>{error}</p>}
+          <button onClick={login} disabled={loading}
+            style={{ width:"100%", padding:14, background:C.navy, color:C.blue, border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:"bold", fontFamily:"Palatino Linotype, serif", opacity:loading?0.6:1, letterSpacing:1 }}>
+            {loading ? "Connexion…" : "Accéder à mon dossier →"}
+          </button>
         </div>
       </div>
     );
   }
 
+  const a = dossier.analyse_json || {};
+  const sc = v => v>=75?C.green:v>=50?C.amber:C.red;
+  const sl = v => v>=75?"Élevé":v>=50?"Moyen":"Faible";
+  const avocat = getAvocatReferent(dossier);
+  const prescDates = getPrescriptionDates(dossier, a);
+  const urgenceColor = { critique:C.red, haute:"#EA580C", modérée:C.amber, faible:C.green };
+  const preC = { favorable:C.green, attention:C.amber, urgent:C.red };
+  const potC = { "élevé":C.green, moyen:C.amber, faible:C.red };
+
   return (
-    <div style={{ flex:1, background:"#F0F6FA", display:"flex", alignItems:"center", justifyContent:"center", padding:40 }}>
-      <div style={{ background:C.white, border:"1px solid #D0E4F0", borderRadius:16, padding:"44px 40px", width:"100%", maxWidth:420, boxShadow:"0 4px 24px rgba(11,26,62,0.1)" }}>
-        <div style={{ textAlign:"center", marginBottom:32 }}>
-          <Logo size={44} withText={false} />
-          <h2 style={{ fontSize:22, color:C.navy, fontFamily:"Palatino Linotype, serif", marginBottom:8, marginTop:16 }}>Accéder à mon dossier</h2>
-          <p style={{ fontSize:13, color:"#4A6A8A", fontFamily:"Calibri, sans-serif", lineHeight:1.5 }}>Connectez-vous avec vos identifiants</p>
-        </div>
-        {[
-          { label:"Email", type:"email", val:email, set:setEmail, placeholder:"votre@email.com" },
-          { label:"Mot de passe", type:"password", val:password, set:setPassword, placeholder:"••••••••" },
-        ].map(f => (
-          <div key={f.label} style={{ marginBottom:18 }}>
-            <label style={{ fontSize:11, fontWeight:"bold", color:C.navy, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1, display:"block", marginBottom:7 }}>{f.label}</label>
-            <input type={f.type} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.placeholder}
-              onKeyDown={e => e.key === "Enter" && login()}
-              style={{ width:"100%", padding:"12px 14px", border:"1.5px solid #D0E4F0", borderRadius:10, fontSize:14, fontFamily:"Calibri, sans-serif", outline:"none", boxSizing:"border-box", color:C.navy }} />
+    <div style={{ flex:1, background:C.navy, overflowY:"auto" }}>
+      <div style={{ maxWidth:900, margin:"0 auto", padding:"28px 24px 60px" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+          <div>
+            <h2 style={{ color:C.blue, fontFamily:"Palatino Linotype, serif", fontSize:22, marginBottom:4 }}>Mon dossier</h2>
+            <p style={{ fontSize:12, color:C.grayMid, fontFamily:"Calibri, sans-serif" }}>
+              Créé le {new Date(dossier.created_at).toLocaleDateString("fr-FR")} · {dossier.email}
+            </p>
           </div>
-        ))}
-        {error && <p style={{ fontSize:12, color:C.red, fontFamily:"Calibri, sans-serif", marginBottom:14 }}>{error}</p>}
-        <button onClick={login} disabled={loading}
-          style={{ width:"100%", padding:14, background:C.navy, color:C.blue, border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:"bold", fontFamily:"Palatino Linotype, serif", opacity:loading ? 0.6 : 1, letterSpacing:1 }}>
-          {loading ? "Connexion…" : "Accéder à mon dossier →"}
-        </button>
+          <div style={{ display:"flex", gap:10 }}>
+            <button onClick={generatePDF} disabled={pdfLoading}
+              style={{ padding:"9px 18px", background:C.blue, color:C.navy, border:"none", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:"bold", fontFamily:"Calibri, sans-serif", opacity:pdfLoading?0.6:1 }}>
+              {pdfLoading ? "…" : "📄 Générer PDF"}
+            </button>
+            <button onClick={()=>setDossier(null)}
+              style={{ background:"transparent", border:`1px solid ${C.navyMid}`, color:C.gray, borderRadius:9, padding:"9px 16px", cursor:"pointer", fontSize:12, fontFamily:"Calibri, sans-serif" }}>
+              Déconnexion
+            </button>
+          </div>
+        </div>
+
+        {/* Bannière alerte prescription urgente */}
+        {prescDates && (prescDates.urgence==="critique"||prescDates.urgence==="haute") && (
+          <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderLeft:`5px solid ${C.red}`, borderRadius:10, padding:"14px 18px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+            <span style={{ fontSize:22 }}>🚨</span>
+            <div>
+              <div style={{ fontSize:14, fontWeight:"bold", color:"#991B1B", fontFamily:"Palatino Linotype, serif" }}>
+                Attention — Prescription {prescDates.urgence === "critique" ? "imminente" : "proche"}
+              </div>
+              <div style={{ fontSize:13, color:"#B91C1C", fontFamily:"Calibri, sans-serif" }}>
+                {prescDates.joursRestants} jours restants avant expiration ({prescDates.expiry}). Agissez maintenant.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Résumé */}
+        <div style={{ ...SDN.card, marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+            <span style={{ fontSize:20 }}>📋</span>
+            <span style={{ fontSize:15, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Résumé du dossier</span>
+            {a.entreprise&&<span style={{ fontSize:12, padding:"3px 10px", borderRadius:20, background:"#F3F4F6", color:"#6B7280", fontFamily:"Calibri, sans-serif" }}>{a.entreprise}</span>}
+            {a.urgence&&<span style={{ fontSize:12, padding:"3px 10px", borderRadius:20, background:(urgenceColor[a.urgence]||C.amber)+"22", color:urgenceColor[a.urgence]||C.amber, border:`1px solid ${urgenceColor[a.urgence]||C.amber}`, fontFamily:"Calibri, sans-serif", fontWeight:"bold" }}>Urgence {a.urgence}</span>}
+          </div>
+          <p style={{ fontSize:14, color:"#374151", lineHeight:1.7, fontFamily:"Calibri, sans-serif", margin:0 }}>{a.resume}</p>
+        </div>
+
+        {/* Grid : Scores + Avocat référent */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+
+          {/* Scores */}
+          {a.scores && (
+            <div style={SDN.card}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                <span style={{ fontSize:18 }}>📊</span>
+                <span style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Faisabilité collective</span>
+                <span style={{ fontSize:22, fontWeight:"bold", color:sc(a.scores.global), marginLeft:"auto", fontFamily:"Palatino Linotype, serif" }}>{a.scores.global}/100</span>
+              </div>
+              {[{l:"Compatibilité",k:"compatibilite"},{l:"Similarité",k:"similarite"},{l:"Faisabilité",k:"faisabilite"}].map(({l,k})=>(
+                <div key={k} style={{ marginBottom:10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <span style={{ fontSize:11, color:"#6B7280", fontFamily:"Calibri, sans-serif" }}>{l}</span>
+                    <span style={{ fontSize:11, fontWeight:"bold", color:sc(a.scores[k]) }}>{a.scores[k]}/100 — {sl(a.scores[k])}</span>
+                  </div>
+                  <div style={{ height:6, background:"#E5E7EB", borderRadius:3 }}>
+                    <div style={{ height:"100%", width:`${a.scores[k]}%`, background:sc(a.scores[k]), borderRadius:3 }}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Avocat référent */}
+          <div style={{ ...SDN.card, background:"#F0FFF9", border:"1px solid #A7F3D0" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+              <span style={{ fontSize:18 }}>⚖️</span>
+              <span style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Avocat référent</span>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+              <div style={{ width:50, height:50, borderRadius:"50%", background:C.navy, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, color:C.blue, fontFamily:"Palatino Linotype, serif", fontWeight:"bold", flexShrink:0 }}>
+                {avocat.nom[0]}
+              </div>
+              <div>
+                <div style={{ fontSize:15, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>{avocat.nom}</div>
+                <div style={{ fontSize:11, color:"#059669", textTransform:"uppercase", letterSpacing:1, marginTop:2 }}>{avocat.role}</div>
+                <a href={`mailto:${avocat.email}`} style={{ fontSize:12, color:C.blue, fontFamily:"Calibri, sans-serif", marginTop:4, display:"block" }}>{avocat.email}</a>
+              </div>
+            </div>
+            <p style={{ fontSize:12, color:"#6B7280", fontFamily:"Calibri, sans-serif", lineHeight:1.5, marginTop:12, margin:0 }}>
+              Votre dossier a été attribué à {avocat.nom} en fonction du type de litige. Vous pouvez le contacter directement par email pour toute question.
+            </p>
+          </div>
+        </div>
+
+        {/* Prescription + Timeline */}
+        <div style={{ ...SDN.card, marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, flexWrap:"wrap" }}>
+            <span style={{ fontSize:18 }}>⏱️</span>
+            <span style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Prescription & Alertes</span>
+            {a.prescription?.statut && (
+              <span style={{ fontSize:12, padding:"2px 10px", borderRadius:20, background:(preC[a.prescription.statut]||C.amber)+"22", color:preC[a.prescription.statut]||C.amber, border:`1px solid ${preC[a.prescription.statut]||C.amber}`, fontFamily:"Calibri, sans-serif", fontWeight:"bold" }}>
+                {a.prescription.statut==="favorable"?"✓ Favorable":a.prescription.statut==="urgent"?"⚠ Urgent":"ℹ Attention"}
+              </span>
+            )}
+          </div>
+          {a.prescription?.message && <p style={{ fontSize:13, color:"#374151", lineHeight:1.6, fontFamily:"Calibri, sans-serif", marginBottom:14 }}>{a.prescription.message}</p>}
+          {a.prescription?.expiration && <p style={{ fontSize:12, color:C.amber, fontWeight:"bold", fontFamily:"Calibri, sans-serif", marginBottom:14 }}>📅 Expiration : {a.prescription.expiration}</p>}
+
+          {/* Timeline alertes */}
+          <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:8, padding:"14px 16px" }}>
+            <div style={{ fontSize:11, color:"#1E40AF", textTransform:"uppercase", letterSpacing:1, marginBottom:12, fontFamily:"Calibri, sans-serif" }}>Alertes programmées</div>
+            <div style={{ display:"flex", gap:0, alignItems:"center" }}>
+              {[
+                { label:"J-365", desc: prescDates?.alerte365 || "1 an avant", color:"#4DB8E8" },
+                { label:"J-180", desc: prescDates?.alerte180 || "6 mois avant", color:"#C9A84C" },
+                { label:"J-30",  desc: prescDates?.alerte30  || "1 mois avant", color:"#F87171" },
+                { label:"⚠ Expiration", desc: prescDates?.expiry || a.prescription?.expiration || "À préciser", color:C.red },
+              ].map((al, i, arr) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", flex:1 }}>
+                  <div style={{ textAlign:"center", flex:1 }}>
+                    <div style={{ width:32, height:32, borderRadius:"50%", background:al.color, margin:"0 auto 6px", display:"flex", alignItems:"center", justifyContent:"center", fontSize:i===3?"14px":"11px", color:"#fff", fontWeight:"bold" }}>
+                      {i===3?"!":"✉"}
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:"bold", color:al.color, fontFamily:"Calibri, sans-serif" }}>{al.label}</div>
+                    <div style={{ fontSize:10, color:"#6B7280", fontFamily:"Calibri, sans-serif", marginTop:2 }}>{al.desc}</div>
+                  </div>
+                  {i < arr.length-1 && <div style={{ flex:0.5, height:2, background:"#BFDBFE", margin:"0 4px", marginBottom:18 }}/>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Action de groupe */}
+        {a.action_groupe && (
+          <div style={{ ...SDN.card, marginBottom:16, borderTop:`4px solid ${potC[a.action_groupe.potentiel]||C.amber}` }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+              <span style={{ fontSize:18 }}>⚖️</span>
+              <span style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Action de groupe</span>
+              <span style={{ fontSize:12, padding:"2px 10px", borderRadius:20, background:(potC[a.action_groupe.potentiel]||C.amber)+"22", color:potC[a.action_groupe.potentiel]||C.amber, border:`1px solid ${potC[a.action_groupe.potentiel]||C.amber}`, fontFamily:"Calibri, sans-serif", fontWeight:"bold" }}>
+                Potentiel {a.action_groupe.potentiel}
+              </span>
+            </div>
+            <p style={{ fontSize:13, color:"#6B7280", lineHeight:1.6, fontFamily:"Calibri, sans-serif", marginBottom:a.action_groupe.actions_trouvees?.length>0?12:0 }}>{a.action_groupe.message}</p>
+            {a.action_groupe.actions_trouvees?.length>0 && (
+              <div>
+                <div style={{ fontSize:11, color:C.grayMid, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Actions identifiées</div>
+                {a.action_groupe.actions_trouvees.map((action,i)=>(
+                  <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 14px", background:"#FEF2F2", border:"1px solid #FECACA", borderLeft:"4px solid #F87171", borderRadius:8, marginBottom:8 }}>
+                    <span style={{ color:"#F87171", fontSize:16, flexShrink:0, lineHeight:1.4 }}>⚠</span>
+                    <span style={{ fontSize:13, color:"#991B1B", fontFamily:"Calibri, sans-serif", lineHeight:1.5 }}>{action}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recommandation */}
+        {a.recommandation && (
+          <div style={{ ...SDN.card, background:C.navy, border:`1px solid ${C.blue}`, marginBottom:16 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+              <span style={{ fontSize:18 }}>💡</span>
+              <span style={{ fontSize:14, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif" }}>Recommandation</span>
+            </div>
+            <p style={{ fontSize:14, color:C.cream, lineHeight:1.7, fontFamily:"Calibri, sans-serif", margin:0 }}>{a.recommandation}</p>
+          </div>
+        )}
+
+        {/* Prochaines étapes */}
+        {a.etapes && (
+          <div style={{ ...SDN.card, marginBottom:16 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+              <span style={{ fontSize:18 }}>🎯</span>
+              <span style={{ fontSize:14, fontWeight:"bold", color:C.navy, fontFamily:"Palatino Linotype, serif" }}>Prochaines étapes</span>
+            </div>
+            {a.etapes.map((e,i)=>(
+              <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start", marginBottom:10 }}>
+                <div style={{ width:26, height:26, borderRadius:"50%", background:C.navy, color:C.blue, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:"bold", flexShrink:0 }}>{i+1}</div>
+                <p style={{ fontSize:13, color:"#374151", lineHeight:1.6, fontFamily:"Calibri, sans-serif", margin:0, paddingTop:4 }}>{e}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Infos complémentaires */}
+        <div style={{ ...SDN.card, background:"rgba(255,255,255,0.04)", border:`1px solid ${C.navyMid}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+            <span style={{ fontSize:18 }}>ℹ️</span>
+            <span style={{ fontSize:14, fontWeight:"bold", color:C.blue, fontFamily:"Palatino Linotype, serif" }}>Informations du dossier</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {[
+              { label:"Entreprise",      val:dossier.entreprise },
+              { label:"Date des faits",  val:dossier.date_faits },
+              { label:"Montant estimé",  val:dossier.montant },
+              { label:"Preuves",         val:dossier.documents },
+              { label:"Démarches",       val:dossier.demarches },
+              { label:"Participation",   val:dossier.participation },
+            ].filter(r=>r.val).map((r,i)=>(
+              <div key={i} style={{ padding:"10px 14px", background:"rgba(255,255,255,0.04)", borderRadius:8, border:`1px solid ${C.navyMid}` }}>
+                <div style={{ fontSize:10, color:C.grayMid, textTransform:"uppercase", letterSpacing:1, marginBottom:3, fontFamily:"Calibri, sans-serif" }}>{r.label}</div>
+                <div style={{ fontSize:13, color:C.cream, fontFamily:"Calibri, sans-serif" }}>{r.val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
   );
 }
+
+const SDN = {
+  card: { background:C.white, border:"1px solid #E5E7EB", borderRadius:14, padding:"20px 24px", boxShadow:"0 2px 8px rgba(0,0,0,0.05)" },
+};
 
 const SD = {
   card: { background:C.white, border:"1px solid #E5E7EB", borderRadius:14, padding:"20px 24px", boxShadow:"0 2px 8px rgba(0,0,0,0.05)" },
@@ -575,6 +804,7 @@ function PageAnalyse({ resetKey }) {
     const hasDate = /20(2[0-9])/.test(d) || /\b(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\b/.test(d) || /il y a \d|depuis \d+ (an|mois)|l.an dernier|hier/.test(d);
     if (!asked.includes("date")&&!hasDate) return { id:"date", content:"Quelle est la date d'achat ou de début du problème ?", type:"date", placeholder:"JJ/MM/AAAA ou MM/AAAA", options:[] };
     if (!asked.includes("corpo")&&(d.includes("malade")||d.includes("symptôme")||d.includes("nausée")||d.includes("vomis")||d.includes("blessé")||d.includes("allergi")||d.includes("hospitali")||d.includes("bébé")||d.includes("enfant"))) return { id:"corpo", content:"Quel type de préjudice corporel ?", multiSelect:true, options:["Nausées / vomissements","Réaction allergique","Hospitalisation","Blessure","Séquelles durables","Aucun symptôme"] };
+    if (!asked.includes("preuve")) return { id:"preuve", content:"Disposez-vous d'une preuve d'achat ?", multiSelect:true, options:["Ticket de caisse","Facture","Relevé bancaire","Photo de l'emballage","Aucune preuve"] };
     return null;
   }
 
@@ -743,6 +973,10 @@ function PageAnalyse({ resetKey }) {
         if (parsed.prescription?.statut==="urgent") parsed.scores.faisabilite=Math.min(parsed.scores.faisabilite||100,40);
         if (msg.includes("milliers")||msg.includes("nombreux")||msg.includes("beaucoup")) parsed.scores.similarite=Math.max(parsed.scores.similarite||0,70);
         parsed.scores.global=Math.round((parsed.scores.compatibilite+parsed.scores.similarite+parsed.scores.faisabilite)/3);
+      }
+      // ── Toujours ajouter l'étape d'inscription ──────────
+      if (parsed.etapes && Array.isArray(parsed.etapes)) {
+        parsed.etapes.push("🔔 Créez votre compte sur AVOCACTION pour sauvegarder ce dossier, recevoir des alertes à J-365, J-180 et J-30 avant la prescription, et être notifié dès qu'une action de groupe vous concerne — c'est gratuit et sans engagement.");
       }
       setSavedAnalyse(parsed);
       setAnalyse(parsed);
@@ -1048,7 +1282,7 @@ Retourne UNIQUEMENT ce JSON valide, commence par { et termine par } :
                               <td style={{ padding:"14px 12px" }}/>
                               {OFFRES.map(o => (
                                 <td key={o.nom} style={{ padding:"14px 10px", textAlign:"center" }}>
-                                  <button onClick={()=>setSelectedOffer(o)}
+                                  <button onClick={()=>setSelectedOffer({nom:"Premium", prix:"99€", highlight:true})} /* DEMO : toujours Premium */
                                     style={{ padding:"9px 0", width:"100%", background:o.highlight?C.blue:"transparent",
                                       color:o.highlight?C.navy:C.blue, border:`1.5px solid ${C.blue}`,
                                       borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:"bold",
