@@ -161,7 +161,7 @@ function PageEquipe() {
         {/* Hero */}
         <div style={{ textAlign:"center", marginBottom:56 }}>
           <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}>
-            <Logo size=60 withText={false} />
+            <Logo size={60} withText={false} />
           </div>
           <h1 style={{ fontSize:36, color:C.navy, fontFamily:"Palatino Linotype, serif", marginBottom:14 }}>Notre équipe</h1>
           <p style={{ fontSize:16, color:"#4A6A8A", fontFamily:"Calibri, sans-serif", maxWidth:600, margin:"0 auto", lineHeight:1.8 }}>
